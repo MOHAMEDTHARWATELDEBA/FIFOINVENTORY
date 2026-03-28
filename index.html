@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة المخزن - FIFO</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --primary: #1a3c5e;
+    --primary-light: #2563a8;
+    --accent: #f0a500;
+    --accent-light: #ffd166;
+    --success: #06d6a0;
+    --danger: #ef476f;
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --sidebar-w: 260px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    direction: rtl;
+  }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: linear-gradient(160deg, #0f2942 0%, #1a3c5e 60%, #1e4d7b 100%);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+  }
+
+  .sidebar-logo {
+    padding: 28px 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+  }
+
+  .sidebar-logo .icon {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    margin: 0 auto 12px;
+    box-shadow: 0 4px 15px rgba(240,165,0,0.4);
+  }
+
+  .sidebar-logo h2 {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .sidebar-logo p {
+    color: var(--accent-light);
+    font-size: 11px;
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  .nav-section {
+    padding: 16px 12px 0;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .nav-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding: 0 10px;
+    margin-bottom: 6px;
+    margin-top: 16px;
+  }
+
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,0.75);
+    font-family: 'Cairo', sans-serif;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: right;
+    margin-bottom: 3px;
+  }
+
+  .nav-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
+
+  .nav-btn.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    color: var(--primary);
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(240,165,0,0.35);
+  }
+
+  .nav-btn .nav-icon {
+    font-size: 18px;
+    width: 22px;
+    text-align: center;
+  }
+
+  /* ===== MAIN ===== */
+  .main {
+    margin-right: var(--sidebar-w);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    background: var(--card);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+
+  .topbar h1 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--primary);
+  }
+
+  .topbar .date-badge {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .content {
+    padding: 28px;
+    flex: 1;
+  }
+
+  /* ===== PAGE ===== */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 22px;
+    border: 1px solid var(--border);
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--primary);
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ===== FORM ===== */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .form-group input,
+  .form-group select {
+    padding: 10px 14px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-family: 'Cairo', sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg);
+    transition: all 0.2s;
+    direction: rtl;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--primary-light);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(37,99,168,0.1);
+  }
+
+  .form-group input[readonly] {
+    background: #f8fafc;
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  /* ===== BUTTONS ===== */
+  .btn {
+    padding: 10px 22px;
+    border-radius: 10px;
+    border: none;
+    font-family: 'Cairo', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary-light), var(--primary));
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(37,99,168,0.3);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(37,99,168,0.4);
+  }
+
+  .btn-success {
+    background: linear-gradient(135deg, #05c08e, #06d6a0);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(6,214,160,0.3);
+  }
+
+  .btn-danger {
+    background: linear-gradient(135deg, #d63060, #ef476f);
+    color: #fff;
+  }
+
+  .btn-excel {
+    background: linear-gradient(135deg, #1d7044, #217346);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(33,115,70,0.3);
+  }
+
+  .btn-excel:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(33,115,70,0.4);
+  }
+
+  .btn-accent {
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    color: var(--primary);
+  }
+
+  /* ===== TABLE ===== */
+  .table-wrap { overflow-x: auto; border-radius: 12px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+
+  thead th {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: #fff;
+    padding: 12px 14px;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+
+  thead th:first-child { border-radius: 0 10px 0 0; }
+  thead th:last-child { border-radius: 10px 0 0 0; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: #f8faff; }
+  tbody tr:last-child { border-bottom: none; }
+
+  tbody td {
+    padding: 11px 14px;
+    text-align: center;
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .tfoot-row td {
+    background: linear-gradient(135deg, #f0f4f8, #e8edf5);
+    font-weight: 800;
+    color: var(--primary);
+    border-top: 2px solid var(--primary);
+    font-size: 13.5px;
+  }
+
+  /* ===== STATS ===== */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; left: 0;
+    height: 4px;
+  }
+
+  .stat-card.blue::before { background: linear-gradient(90deg, var(--primary-light), var(--primary)); }
+  .stat-card.green::before { background: linear-gradient(90deg, #05c08e, #06d6a0); }
+  .stat-card.orange::before { background: linear-gradient(90deg, var(--accent), var(--accent-light)); }
+  .stat-card.red::before { background: linear-gradient(90deg, #d63060, #ef476f); }
+
+  .stat-icon { font-size: 28px; margin-bottom: 8px; }
+  .stat-label { font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 4px; }
+  .stat-value { font-size: 22px; font-weight: 900; color: var(--primary); }
+  .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ===== BADGE ===== */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .badge-in { background: #d1fae5; color: #065f46; }
+  .badge-out { background: #fee2e2; color: #991b1b; }
+
+  /* ===== ACTION BTNS ===== */
+  .btn-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* ===== MONTH FILTER ===== */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 18px;
+  }
+
+  /* ===== EMPTY STATE ===== */
+  .empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--primary);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: 700;
+    z-index: 9999;
+    transition: transform 0.3s;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { background: linear-gradient(135deg, #05c08e, #06d6a0); color: #fff; }
+  .toast.error { background: linear-gradient(135deg, #d63060, #ef476f); }
+
+  /* ===== SCROLLBAR ===== */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 768px) {
+    :root { --sidebar-w: 0px; }
+    .sidebar { display: none; }
+    .content { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="icon">🏭</div>
+    <h2>نظام إدارة المخزن</h2>
+    <p>FIFO SYSTEM</p>
+  </div>
+  <nav class="nav-section">
+    <div class="nav-label">الإعدادات</div>
+    <button class="nav-btn active" onclick="showPage('items')">
+      <span class="nav-icon">🏷️</span> تكويد الأصناف
+    </button>
+
+    <div class="nav-label">الحركات</div>
+    <button class="nav-btn" onclick="showPage('in')">
+      <span class="nav-icon">📥</span> إضافة الأصناف
+    </button>
+    <button class="nav-btn" onclick="showPage('out')">
+      <span class="nav-icon">📤</span> منصرف الأصناف
+    </button>
+
+    <div class="nav-label">التقارير</div>
+    <button class="nav-btn" onclick="showPage('card')">
+      <span class="nav-icon">📋</span> كارت الصنف
+    </button>
+    <button class="nav-btn" onclick="showPage('monthly')">
+      <span class="nav-icon">📅</span> التقرير الشهري
+    </button>
+    <button class="nav-btn" onclick="showPage('general')">
+      <span class="nav-icon">📊</span> التقرير العام
+    </button>
+  </nav>
+</aside>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- MAIN -->
+<main class="main">
+  <header class="topbar">
+    <h1 id="pageTitle">تكويد الأصناف</h1>
+    <span class="date-badge" id="todayDate"></span>
+  </header>
+
+  <div class="content">
+
+    <!-- =================== PAGE 1: ITEMS =================== -->
+    <div class="page active" id="page-items">
+      <div class="card">
+        <div class="card-title">➕ إضافة صنف جديد</div>
+        <div class="form-grid" style="grid-template-columns: 1fr 2fr auto;">
+          <div class="form-group">
+            <label>رقم الصنف (كود)</label>
+            <input type="text" id="itemCode" placeholder="مثال: ITM-001">
+          </div>
+          <div class="form-group">
+            <label>اسم الصنف</label>
+            <input type="text" id="itemName" placeholder="اسم الصنف">
+          </div>
+          <div class="form-group" style="justify-content: flex-end; padding-top: 22px;">
+            <button class="btn btn-primary" onclick="addItem()">💾 حفظ الصنف</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="justify-content: space-between;">
+          <span>🏷️ قائمة الأصناف المكودة</span>
+          <button class="btn btn-excel" onclick="exportItemsExcel()">📥 تصدير Excel</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>كود الصنف</th>
+                <th>اسم الصنف</th>
+                <th>الكمية المتاحة</th>
+                <th>القيمة المتاحة</th>
+                <th>إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================== PAGE 2: IN =================== -->
+    <div class="page" id="page-in">
+      <div class="card">
+        <div class="card-title">📥 إضافة حركة وارد</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>التاريخ</label>
+            <input type="date" id="inDate">
+          </div>
+          <div class="form-group">
+            <label>كود الصنف</label>
+            <select id="inCode" onchange="fillInName()">
+              <option value="">-- اختر الصنف --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>اسم الصنف</label>
+            <input type="text" id="inName" readonly>
+          </div>
+          <div class="form-group">
+            <label>سعر الوحدة</label>
+            <input type="number" id="inPrice" placeholder="0.00" oninput="calcInTotal()">
+          </div>
+          <div class="form-group">
+            <label>عدد الوحدات</label>
+            <input type="number" id="inQty" placeholder="0" oninput="calcInTotal()">
+          </div>
+          <div class="form-group">
+            <label>الإجمالي</label>
+            <input type="number" id="inTotal" readonly>
+          </div>
+          <div class="form-group">
+            <label>إجمالي المتاح (كمية)</label>
+            <input type="number" id="inAvailQty" readonly>
+          </div>
+          <div class="form-group">
+            <label>إجمالي المتاح (قيمة)</label>
+            <input type="number" id="inAvailVal" readonly>
+          </div>
+        </div>
+        <div class="btn-actions">
+          <button class="btn btn-success" onclick="addInTransaction()">✅ تسجيل الوارد</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="justify-content: space-between;">
+          <span>📥 سجل الواردات</span>
+          <button class="btn btn-excel" onclick="exportInExcel()">📥 تصدير Excel</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>التاريخ</th><th>الكود</th><th>الصنف</th>
+                <th>سعر الوحدة</th><th>الكمية</th><th>الإجمالي</th>
+                <th>متاح (كمية)</th><th>متاح (قيمة)</th><th>حذف</th>
+              </tr>
+            </thead>
+            <tbody id="inTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================== PAGE 3: OUT =================== -->
+    <div class="page" id="page-out">
+      <div class="card">
+        <div class="card-title">📤 تسجيل حركة منصرف</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>التاريخ</label>
+            <input type="date" id="outDate">
+          </div>
+          <div class="form-group">
+            <label>كود الصنف</label>
+            <select id="outCode" onchange="fillOutName()">
+              <option value="">-- اختر الصنف --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>اسم الصنف</label>
+            <input type="text" id="outName" readonly>
+          </div>
+          <div class="form-group">
+            <label>عدد الوحدات المنصرفة</label>
+            <input type="number" id="outQty" placeholder="0" oninput="calcOutTotal()">
+          </div>
+          <div class="form-group">
+            <label>الإجمالي (قيمة FIFO)</label>
+            <input type="number" id="outTotal" readonly>
+          </div>
+          <div class="form-group">
+            <label>إجمالي المتاح (كمية)</label>
+            <input type="number" id="outAvailQty" readonly>
+          </div>
+          <div class="form-group">
+            <label>إجمالي المتاح (قيمة)</label>
+            <input type="number" id="outAvailVal" readonly>
+          </div>
+        </div>
+        <div class="btn-actions">
+          <button class="btn btn-danger" onclick="addOutTransaction()">🔴 تسجيل المنصرف</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" style="justify-content: space-between;">
+          <span>📤 سجل المنصرفات</span>
+          <button class="btn btn-excel" onclick="exportOutExcel()">📥 تصدير Excel</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>التاريخ</th><th>الكود</th><th>الصنف</th>
+                <th>الكمية المنصرفة</th><th>الإجمالي</th>
+                <th>متاح (كمية)</th><th>متاح (قيمة)</th><th>حذف</th>
+              </tr>
+            </thead>
+            <tbody id="outTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================== PAGE 4: CARD =================== -->
+    <div class="page" id="page-card">
+      <div class="card">
+        <div class="card-title">🔍 اختيار الصنف</div>
+        <div class="filter-bar">
+          <div class="form-group" style="min-width: 220px;">
+            <label>الصنف</label>
+            <select id="cardCode" onchange="loadCard()">
+              <option value="">-- اختر الصنف --</option>
+            </select>
+          </div>
+          <button class="btn btn-excel" onclick="exportCardExcel()">📥 تصدير Excel</button>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="cardStats" style="display:none;">
+        <div class="stat-card blue">
+          <div class="stat-icon">📥</div>
+          <div class="stat-label">إجمالي الوارد</div>
+          <div class="stat-value" id="cs-inQty">0</div>
+          <div class="stat-sub" id="cs-inVal">قيمة: 0</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">📤</div>
+          <div class="stat-label">إجمالي المنصرف</div>
+          <div class="stat-value" id="cs-outQty">0</div>
+          <div class="stat-sub" id="cs-outVal">قيمة: 0</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">📦</div>
+          <div class="stat-label">الرصيد المتاح</div>
+          <div class="stat-value" id="cs-balQty">0</div>
+          <div class="stat-sub" id="cs-balVal">قيمة: 0</div>
+        </div>
+      </div>
+
+      <div class="card" id="cardTable" style="display:none;">
+        <div class="card-title">📋 تفاصيل الحركات</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>التاريخ</th><th>نوع الحركة</th>
+                <th>الكمية الواردة</th><th>قيمة الوارد</th>
+                <th>الكمية المنصرفة</th><th>قيمة المنصرف</th>
+                <th>الرصيد (كمية)</th><th>الرصيد (قيمة)</th>
+              </tr>
+            </thead>
+            <tbody id="cardBody"></tbody>
+            <tfoot><tr class="tfoot-row" id="cardFoot"></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================== PAGE 5: MONTHLY =================== -->
+    <div class="page" id="page-monthly">
+      <div class="card">
+        <div class="card-title">📅 اختيار الشهر</div>
+        <div class="filter-bar">
+          <div class="form-group">
+            <label>الشهر</label>
+            <input type="month" id="monthFilter" onchange="loadMonthly()">
+          </div>
+          <button class="btn btn-excel" onclick="exportMonthlyExcel()">📥 تصدير Excel</button>
+        </div>
+      </div>
+
+      <div class="card" id="monthlyCard">
+        <div class="card-title">📊 التقرير الشهري للأصناف</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>الكود</th><th>اسم الصنف</th>
+                <th>الوارد (كمية)</th><th>الوارد (قيمة)</th>
+                <th>المنصرف (كمية)</th><th>المنصرف (قيمة)</th>
+                <th>المتاح (كمية)</th><th>المتاح (قيمة)</th>
+              </tr>
+            </thead>
+            <tbody id="monthlyBody"></tbody>
+            <tfoot><tr class="tfoot-row" id="monthlyFoot"></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================== PAGE 6: GENERAL =================== -->
+    <div class="page" id="page-general">
+      <div class="card">
+        <div class="card-title">📊 اختيار فترة التقرير</div>
+        <div class="filter-bar">
+          <div class="form-group">
+            <label>من تاريخ</label>
+            <input type="date" id="genFrom" onchange="loadGeneral()">
+          </div>
+          <div class="form-group">
+            <label>إلى تاريخ</label>
+            <input type="date" id="genTo" onchange="loadGeneral()">
+          </div>
+          <button class="btn btn-excel" onclick="exportGeneralExcel()">📥 تصدير Excel</button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card blue">
+          <div class="stat-icon">🏁</div>
+          <div class="stat-label">رصيد أول المدة (كمية)</div>
+          <div class="stat-value" id="gen-opQty">0</div>
+          <div class="stat-sub" id="gen-opVal">قيمة: 0</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">📥</div>
+          <div class="stat-label">المضاف خلال المدة (كمية)</div>
+          <div class="stat-value" id="gen-inQty">0</div>
+          <div class="stat-sub" id="gen-inVal">قيمة: 0</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-icon">📤</div>
+          <div class="stat-label">المنصرف خلال المدة (كمية)</div>
+          <div class="stat-value" id="gen-outQty">0</div>
+          <div class="stat-sub" id="gen-outVal">قيمة: 0</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">🔚</div>
+          <div class="stat-label">رصيد آخر المدة (كمية)</div>
+          <div class="stat-value" id="gen-clQty">0</div>
+          <div class="stat-sub" id="gen-clVal">قيمة: 0</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 تفاصيل التقرير العام لكل الأصناف</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>الكود</th><th>الصنف</th>
+                <th>أول مدة (كمية)</th><th>أول مدة (قيمة)</th>
+                <th>وارد (كمية)</th><th>وارد (قيمة)</th>
+                <th>منصرف (كمية)</th><th>منصرف (قيمة)</th>
+                <th>آخر مدة (كمية)</th><th>آخر مدة (قيمة)</th>
+              </tr>
+            </thead>
+            <tbody id="generalBody"></tbody>
+            <tfoot><tr class="tfoot-row" id="generalFoot"></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</main>
+
+<script>
+// ===================== DATA STORE =====================
+let db = {
+  items: [],          // {code, name}
+  inTrans: [],        // {id, date, code, name, price, qty, total, availQty, availVal}
+  outTrans: [],       // {id, date, code, name, qty, total, availQty, availVal, fifoDetail}
+};
+
+function save() { localStorage.setItem('fifo_db', JSON.stringify(db)); }
+function load() {
+  const d = localStorage.getItem('fifo_db');
+  if (d) db = JSON.parse(d);
+}
+
+// ===================== INIT =====================
+load();
+setToday();
+renderAll();
+
+function setToday() {
+  const today = new Date();
+  const fmt = today.toISOString().split('T')[0];
+  document.getElementById('todayDate').textContent = today.toLocaleDateString('ar-EG', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  ['inDate','outDate'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = fmt;
+  });
+  const m = fmt.substring(0,7);
+  const mf = document.getElementById('monthFilter');
+  if (mf) mf.value = m;
+
+  const gf = document.getElementById('genFrom');
+  const gt = document.getElementById('genTo');
+  if (gf) gf.value = fmt.substring(0,8) + '01';
+  if (gt) gt.value = fmt;
+}
+
+// ===================== NAVIGATION =====================
+const pageTitles = {
+  items: 'تكويد الأصناف',
+  in: 'إضافة الأصناف',
+  out: 'منصرف الأصناف',
+  card: 'كارت الصنف',
+  monthly: 'التقرير الشهري',
+  general: 'التقرير العام'
+};
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if (b.getAttribute('onclick')?.includes("'" + id + "'")) b.classList.add('active');
+  });
+  document.getElementById('pageTitle').textContent = pageTitles[id];
+  if (id === 'card') loadCard();
+  if (id === 'monthly') loadMonthly();
+  if (id === 'general') loadGeneral();
+}
+
+// ===================== RENDER ALL =====================
+function renderAll() {
+  renderItemsTable();
+  renderSelectOptions();
+  renderInTable();
+  renderOutTable();
+}
+
+// ===================== TOAST =====================
+function toast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ===================== ITEMS =====================
+function addItem() {
+  const code = document.getElementById('itemCode').value.trim();
+  const name = document.getElementById('itemName').value.trim();
+  if (!code || !name) { toast('أدخل كود واسم الصنف', 'error'); return; }
+  if (db.items.find(i => i.code === code)) { toast('هذا الكود موجود مسبقاً', 'error'); return; }
+  db.items.push({code, name});
+  save();
+  document.getElementById('itemCode').value = '';
+  document.getElementById('itemName').value = '';
+  renderAll();
+  toast('✅ تم إضافة الصنف بنجاح');
+}
+
+function deleteItem(code) {
+  if (!confirm('هل تريد حذف هذا الصنف؟')) return;
+  db.items = db.items.filter(i => i.code !== code);
+  db.inTrans = db.inTrans.filter(t => t.code !== code);
+  db.outTrans = db.outTrans.filter(t => t.code !== code);
+  save(); renderAll(); toast('تم الحذف', 'error');
+}
+
+function renderItemsTable() {
+  const tbody = document.getElementById('itemsTable');
+  if (!tbody) return;
+  if (db.items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد أصناف مكودة بعد</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = db.items.map((item, i) => {
+    const bal = getBalance(item.code);
+    return `<tr>
+      <td>${i+1}</td>
+      <td><strong>${item.code}</strong></td>
+      <td>${item.name}</td>
+      <td><span style="font-weight:800;color:var(--primary)">${fmt(bal.qty)}</span></td>
+      <td><span style="font-weight:800;color:var(--success)">${fmt(bal.val)} ج.م</span></td>
+      <td><button class="btn btn-danger" style="padding:5px 12px;font-size:12px" onclick="deleteItem('${item.code}')">🗑️ حذف</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSelectOptions() {
+  const opts = '<option value="">-- اختر الصنف --</option>' +
+    db.items.map(i => `<option value="${i.code}">${i.code} - ${i.name}</option>`).join('');
+  ['inCode','outCode','cardCode'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+// ===================== FIFO ENGINE =====================
+// Returns array of {price, qty} layers for a given item (oldest first)
+function getFifoLayers(code) {
+  // Get all IN sorted by date asc
+  const ins = db.inTrans.filter(t => t.code === code)
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(t => ({date: t.date, price: parseFloat(t.price), qty: parseInt(t.qty)}));
+
+  // Get all OUT sorted by date asc
+  const outs = db.outTrans.filter(t => t.code === code)
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  // Build FIFO layers
+  let layers = ins.map(i => ({...i})); // deep copy
+  for (const out of outs) {
+    let remaining = parseInt(out.qty);
+    for (let l of layers) {
+      if (remaining <= 0) break;
+      const take = Math.min(l.qty, remaining);
+      l.qty -= take;
+      remaining -= take;
+    }
+    layers = layers.filter(l => l.qty > 0);
+  }
+  return layers;
+}
+
+function getBalance(code) {
+  const layers = getFifoLayers(code);
+  const qty = layers.reduce((s, l) => s + l.qty, 0);
+  const val = layers.reduce((s, l) => s + l.qty * l.price, 0);
+  return {qty, val};
+}
+
+// Calculate cost of issuing `qty` items using FIFO
+function calcFifoCost(code, qty) {
+  const ins = db.inTrans.filter(t => t.code === code)
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .map(t => ({price: parseFloat(t.price), qty: parseInt(t.qty)}));
+
+  const outs = db.outTrans.filter(t => t.code === code)
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  let layers = ins.map(i => ({...i}));
+  for (const out of outs) {
+    let rem = parseInt(out.qty);
+    for (let l of layers) {
+      if (rem <= 0) break;
+      const take = Math.min(l.qty, rem);
+      l.qty -= take; rem -= take;
+    }
+    layers = layers.filter(l => l.qty > 0);
+  }
+
+  // Now calc cost for new out
+  let cost = 0, rem = qty;
+  for (let l of layers) {
+    if (rem <= 0) break;
+    const take = Math.min(l.qty, rem);
+    cost += take * l.price;
+    rem -= take;
+  }
+  if (rem > 0) return null; // not enough stock
+  return cost;
+}
+
+// ===================== IN TRANSACTIONS =====================
+function fillInName() {
+  const code = document.getElementById('inCode').value;
+  const item = db.items.find(i => i.code === code);
+  document.getElementById('inName').value = item ? item.name : '';
+  updateInAvail(code);
+}
+
+function updateInAvail(code) {
+  if (!code) { document.getElementById('inAvailQty').value = ''; document.getElementById('inAvailVal').value = ''; return; }
+  const bal = getBalance(code);
+  document.getElementById('inAvailQty').value = bal.qty;
+  document.getElementById('inAvailVal').value = bal.val.toFixed(2);
+}
+
+function calcInTotal() {
+  const price = parseFloat(document.getElementById('inPrice').value) || 0;
+  const qty = parseInt(document.getElementById('inQty').value) || 0;
+  document.getElementById('inTotal').value = (price * qty).toFixed(2);
+}
+
+function addInTransaction() {
+  const date = document.getElementById('inDate').value;
+  const code = document.getElementById('inCode').value;
+  const name = document.getElementById('inName').value;
+  const price = parseFloat(document.getElementById('inPrice').value);
+  const qty = parseInt(document.getElementById('inQty').value);
+
+  if (!date || !code || !price || !qty) { toast('أكمل جميع البيانات', 'error'); return; }
+  if (qty <= 0 || price <= 0) { toast('الكمية والسعر يجب أن يكونا أكبر من صفر', 'error'); return; }
+
+  const total = price * qty;
+  const balBefore = getBalance(code);
+
+  db.inTrans.push({
+    id: Date.now(),
+    date, code, name,
+    price: price.toFixed(2),
+    qty,
+    total: total.toFixed(2),
+    availQty: balBefore.qty + qty,
+    availVal: (balBefore.val + total).toFixed(2)
+  });
+
+  save(); renderAll();
+  updateInAvail(code);
+  document.getElementById('inPrice').value = '';
+  document.getElementById('inQty').value = '';
+  document.getElementById('inTotal').value = '';
+  toast('✅ تم تسجيل الوارد بنجاح');
+}
+
+function deleteIn(id) {
+  if (!confirm('حذف هذه الحركة؟')) return;
+  db.inTrans = db.inTrans.filter(t => t.id !== id);
+  save(); renderAll(); toast('تم الحذف', 'error');
+}
+
+function renderInTable() {
+  const tbody = document.getElementById('inTable');
+  if (!tbody) return;
+  const sorted = [...db.inTrans].sort((a,b) => b.date.localeCompare(a.date));
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد حركات واردة</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sorted.map((t, i) => `<tr>
+    <td>${i+1}</td>
+    <td>${formatDate(t.date)}</td>
+    <td><strong>${t.code}</strong></td>
+    <td>${t.name}</td>
+    <td>${fmt(t.price)}</td>
+    <td>${fmt(t.qty)}</td>
+    <td style="color:var(--success);font-weight:700">${fmt(t.total)}</td>
+    <td>${fmt(t.availQty)}</td>
+    <td>${fmt(t.availVal)}</td>
+    <td><button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="deleteIn(${t.id})">🗑️</button></td>
+  </tr>`).join('');
+}
+
+// ===================== OUT TRANSACTIONS =====================
+function fillOutName() {
+  const code = document.getElementById('outCode').value;
+  const item = db.items.find(i => i.code === code);
+  document.getElementById('outName').value = item ? item.name : '';
+  calcOutTotal();
+  updateOutAvail(code);
+}
+
+function updateOutAvail(code) {
+  if (!code) return;
+  const bal = getBalance(code);
+  document.getElementById('outAvailQty').value = bal.qty;
+  document.getElementById('outAvailVal').value = bal.val.toFixed(2);
+}
+
+function calcOutTotal() {
+  const code = document.getElementById('outCode').value;
+  const qty = parseInt(document.getElementById('outQty').value) || 0;
+  if (!code || qty <= 0) { document.getElementById('outTotal').value = ''; return; }
+  const cost = calcFifoCost(code, qty);
+  document.getElementById('outTotal').value = cost !== null ? cost.toFixed(2) : '⛔ رصيد غير كافٍ';
+}
+
+function addOutTransaction() {
+  const date = document.getElementById('outDate').value;
+  const code = document.getElementById('outCode').value;
+  const name = document.getElementById('outName').value;
+  const qty = parseInt(document.getElementById('outQty').value);
+
+  if (!date || !code || !qty) { toast('أكمل جميع البيانات', 'error'); return; }
+  if (qty <= 0) { toast('الكمية يجب أن تكون أكبر من صفر', 'error'); return; }
+
+  const cost = calcFifoCost(code, qty);
+  if (cost === null) { toast('⛔ الرصيد المتاح غير كافٍ', 'error'); return; }
+
+  const balBefore = getBalance(code);
+
+  db.outTrans.push({
+    id: Date.now(),
+    date, code, name, qty,
+    total: cost.toFixed(2),
+    availQty: balBefore.qty - qty,
+    availVal: (balBefore.val - cost).toFixed(2)
+  });
+
+  save(); renderAll();
+  updateOutAvail(code);
+  document.getElementById('outQty').value = '';
+  document.getElementById('outTotal').value = '';
+  toast('✅ تم تسجيل المنصرف بنجاح');
+}
+
+function deleteOut(id) {
+  if (!confirm('حذف هذه الحركة؟')) return;
+  db.outTrans = db.outTrans.filter(t => t.id !== id);
+  save(); renderAll(); toast('تم الحذف', 'error');
+}
+
+function renderOutTable() {
+  const tbody = document.getElementById('outTable');
+  if (!tbody) return;
+  const sorted = [...db.outTrans].sort((a,b) => b.date.localeCompare(a.date));
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد حركات منصرفة</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sorted.map((t, i) => `<tr>
+    <td>${i+1}</td>
+    <td>${formatDate(t.date)}</td>
+    <td><strong>${t.code}</strong></td>
+    <td>${t.name}</td>
+    <td>${fmt(t.qty)}</td>
+    <td style="color:var(--danger);font-weight:700">${fmt(t.total)}</td>
+    <td>${fmt(t.availQty)}</td>
+    <td>${fmt(t.availVal)}</td>
+    <td><button class="btn btn-danger" style="padding:4px 10px;font-size:11px" onclick="deleteOut(${t.id})">🗑️</button></td>
+  </tr>`).join('');
+}
+
+// ===================== CARD =====================
+function loadCard() {
+  const code = document.getElementById('cardCode').value;
+  if (!code) {
+    document.getElementById('cardStats').style.display = 'none';
+    document.getElementById('cardTable').style.display = 'none';
+    return;
+  }
+
+  const ins = db.inTrans.filter(t => t.code === code).sort((a,b) => a.date.localeCompare(b.date));
+  const outs = db.outTrans.filter(t => t.code === code).sort((a,b) => a.date.localeCompare(b.date));
+
+  const totInQty = ins.reduce((s,t) => s + parseInt(t.qty), 0);
+  const totInVal = ins.reduce((s,t) => s + parseFloat(t.total), 0);
+  const totOutQty = outs.reduce((s,t) => s + parseInt(t.qty), 0);
+  const totOutVal = outs.reduce((s,t) => s + parseFloat(t.total), 0);
+  const balQty = totInQty - totOutQty;
+  const balVal = totInVal - totOutVal;
+
+  document.getElementById('cs-inQty').textContent = fmt(totInQty);
+  document.getElementById('cs-inVal').textContent = 'قيمة: ' + fmt(totInVal) + ' ج.م';
+  document.getElementById('cs-outQty').textContent = fmt(totOutQty);
+  document.getElementById('cs-outVal').textContent = 'قيمة: ' + fmt(totOutVal) + ' ج.م';
+  document.getElementById('cs-balQty').textContent = fmt(balQty);
+  document.getElementById('cs-balVal').textContent = 'قيمة: ' + fmt(balVal) + ' ج.م';
+
+  document.getElementById('cardStats').style.display = 'grid';
+  document.getElementById('cardTable').style.display = 'block';
+
+  // Build combined movements
+  let movements = [];
+  ins.forEach(t => movements.push({date: t.date, type: 'in', inQty: parseInt(t.qty), inVal: parseFloat(t.total), outQty: 0, outVal: 0}));
+  outs.forEach(t => movements.push({date: t.date, type: 'out', inQty: 0, inVal: 0, outQty: parseInt(t.qty), outVal: parseFloat(t.total)}));
+  movements.sort((a,b) => a.date.localeCompare(b.date));
+
+  let runQty = 0, runVal = 0;
+  const rows = movements.map((m, i) => {
+    runQty += m.inQty - m.outQty;
+    runVal += m.inVal - m.outVal;
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${formatDate(m.date)}</td>
+      <td><span class="badge ${m.type === 'in' ? 'badge-in' : 'badge-out'}">${m.type === 'in' ? '📥 وارد' : '📤 منصرف'}</span></td>
+      <td style="color:var(--success)">${m.inQty > 0 ? fmt(m.inQty) : '-'}</td>
+      <td style="color:var(--success)">${m.inVal > 0 ? fmt(m.inVal) : '-'}</td>
+      <td style="color:var(--danger)">${m.outQty > 0 ? fmt(m.outQty) : '-'}</td>
+      <td style="color:var(--danger)">${m.outVal > 0 ? fmt(m.outVal) : '-'}</td>
+      <td style="font-weight:700;color:var(--primary)">${fmt(runQty)}</td>
+      <td style="font-weight:700;color:var(--primary)">${fmt(runVal)} ج.م</td>
+    </tr>`;
+  });
+
+  document.getElementById('cardBody').innerHTML = rows.join('') || `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد حركات</p></div></td></tr>`;
+  document.getElementById('cardFoot').innerHTML = `
+    <td colspan="3">الإجمالي</td>
+    <td>${fmt(totInQty)}</td><td>${fmt(totInVal)} ج.م</td>
+    <td>${fmt(totOutQty)}</td><td>${fmt(totOutVal)} ج.م</td>
+    <td>${fmt(balQty)}</td><td>${fmt(balVal)} ج.م</td>`;
+}
+
+// ===================== MONTHLY =====================
+function loadMonthly() {
+  const month = document.getElementById('monthFilter').value;
+  if (!month) return;
+  const tbody = document.getElementById('monthlyBody');
+  const tfoot = document.getElementById('monthlyFoot');
+
+  let totInQ=0,totInV=0,totOutQ=0,totOutV=0,totBalQ=0,totBalV=0;
+  const rows = db.items.map((item, i) => {
+    const ins = db.inTrans.filter(t => t.code === item.code && t.date.startsWith(month));
+    const outs = db.outTrans.filter(t => t.code === item.code && t.date.startsWith(month));
+    const inQ = ins.reduce((s,t) => s + parseInt(t.qty), 0);
+    const inV = ins.reduce((s,t) => s + parseFloat(t.total), 0);
+    const outQ = outs.reduce((s,t) => s + parseInt(t.qty), 0);
+    const outV = outs.reduce((s,t) => s + parseFloat(t.total), 0);
+    const bal = getBalance(item.code);
+    totInQ+=inQ; totInV+=inV; totOutQ+=outQ; totOutV+=outV; totBalQ+=bal.qty; totBalV+=bal.val;
+    return `<tr>
+      <td>${i+1}</td><td><strong>${item.code}</strong></td><td>${item.name}</td>
+      <td style="color:var(--success)">${fmt(inQ)}</td><td style="color:var(--success)">${fmt(inV)}</td>
+      <td style="color:var(--danger)">${fmt(outQ)}</td><td style="color:var(--danger)">${fmt(outV)}</td>
+      <td style="font-weight:700">${fmt(bal.qty)}</td><td style="font-weight:700">${fmt(bal.val)} ج.م</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.length ? rows.join('') : `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد بيانات لهذا الشهر</p></div></td></tr>`;
+  tfoot.innerHTML = `<td colspan="3">الإجمالي</td>
+    <td>${fmt(totInQ)}</td><td>${fmt(totInV)} ج.م</td>
+    <td>${fmt(totOutQ)}</td><td>${fmt(totOutV)} ج.م</td>
+    <td>${fmt(totBalQ)}</td><td>${fmt(totBalV)} ج.م</td>`;
+}
+
+// ===================== GENERAL =====================
+function loadGeneral() {
+  const from = document.getElementById('genFrom').value;
+  const to = document.getElementById('genTo').value;
+  if (!from || !to) return;
+
+  let totOpQ=0,totOpV=0,totInQ=0,totInV=0,totOutQ=0,totOutV=0,totClQ=0,totClV=0;
+  const rows = db.items.map((item, i) => {
+    // Opening: all transactions BEFORE from date
+    const opIns = db.inTrans.filter(t => t.code === item.code && t.date < from);
+    const opOuts = db.outTrans.filter(t => t.code === item.code && t.date < from);
+    const opInQ = opIns.reduce((s,t) => s+parseInt(t.qty), 0);
+    const opInV = opIns.reduce((s,t) => s+parseFloat(t.total), 0);
+    const opOutQ = opOuts.reduce((s,t) => s+parseInt(t.qty), 0);
+    const opOutV = opOuts.reduce((s,t) => s+parseFloat(t.total), 0);
+    const opQ = opInQ - opOutQ;
+    const opV = opInV - opOutV;
+
+    // Period transactions
+    const pIns = db.inTrans.filter(t => t.code === item.code && t.date >= from && t.date <= to);
+    const pOuts = db.outTrans.filter(t => t.code === item.code && t.date >= from && t.date <= to);
+    const pInQ = pIns.reduce((s,t) => s+parseInt(t.qty), 0);
+    const pInV = pIns.reduce((s,t) => s+parseFloat(t.total), 0);
+    const pOutQ = pOuts.reduce((s,t) => s+parseInt(t.qty), 0);
+    const pOutV = pOuts.reduce((s,t) => s+parseFloat(t.total), 0);
+
+    const clQ = opQ + pInQ - pOutQ;
+    const clV = opV + pInV - pOutV;
+
+    totOpQ+=opQ; totOpV+=opV; totInQ+=pInQ; totInV+=pInV;
+    totOutQ+=pOutQ; totOutV+=pOutV; totClQ+=clQ; totClV+=clV;
+
+    return `<tr>
+      <td>${i+1}</td><td><strong>${item.code}</strong></td><td>${item.name}</td>
+      <td>${fmt(opQ)}</td><td>${fmt(opV)} ج.م</td>
+      <td style="color:var(--success)">${fmt(pInQ)}</td><td style="color:var(--success)">${fmt(pInV)} ج.م</td>
+      <td style="color:var(--danger)">${fmt(pOutQ)}</td><td style="color:var(--danger)">${fmt(pOutV)} ج.م</td>
+      <td style="font-weight:800;color:var(--primary)">${fmt(clQ)}</td>
+      <td style="font-weight:800;color:var(--primary)">${fmt(clV)} ج.م</td>
+    </tr>`;
+  });
+
+  document.getElementById('generalBody').innerHTML = rows.join('') || `<tr><td colspan="11"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد بيانات</p></div></td></tr>`;
+  document.getElementById('generalFoot').innerHTML = `<td colspan="3">الإجمالي</td>
+    <td>${fmt(totOpQ)}</td><td>${fmt(totOpV)} ج.م</td>
+    <td>${fmt(totInQ)}</td><td>${fmt(totInV)} ج.م</td>
+    <td>${fmt(totOutQ)}</td><td>${fmt(totOutV)} ج.م</td>
+    <td>${fmt(totClQ)}</td><td>${fmt(totClV)} ج.م</td>`;
+
+  document.getElementById('gen-opQty').textContent = fmt(totOpQ);
+  document.getElementById('gen-opVal').textContent = 'قيمة: ' + fmt(totOpV) + ' ج.م';
+  document.getElementById('gen-inQty').textContent = fmt(totInQ);
+  document.getElementById('gen-inVal').textContent = 'قيمة: ' + fmt(totInV) + ' ج.م';
+  document.getElementById('gen-outQty').textContent = fmt(totOutQ);
+  document.getElementById('gen-outVal').textContent = 'قيمة: ' + fmt(totOutV) + ' ج.م';
+  document.getElementById('gen-clQty').textContent = fmt(totClQ);
+  document.getElementById('gen-clVal').textContent = 'قيمة: ' + fmt(totClV) + ' ج.م';
+}
+
+// ===================== HELPERS =====================
+function fmt(n) {
+  const num = parseFloat(n) || 0;
+  return num % 1 === 0 ? num.toLocaleString('ar-EG') : num.toLocaleString('ar-EG', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  return new Date(d + 'T00:00:00').toLocaleDateString('ar-EG', {year:'numeric', month:'short', day:'numeric'});
+}
+
+// ===================== EXCEL EXPORTS =====================
+function excelStyles(ws, headers, data) {
+  // XLSX basic styling via cell formats
+}
+
+function makeWorkbook(sheetName, headers, rows, title) {
+  const wb = XLSX.utils.book_new();
+  const wsData = [[title], [], headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Column widths
+  ws['!cols'] = headers.map(() => ({wch: 18}));
+
+  // Merge title
+  ws['!merges'] = [{s:{r:0,c:0}, e:{r:0,c:headers.length-1}}];
+
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  return wb;
+}
+
+function exportItemsExcel() {
+  const headers = ['#', 'كود الصنف', 'اسم الصنف', 'الكمية المتاحة', 'القيمة المتاحة'];
+  const rows = db.items.map((item, i) => {
+    const bal = getBalance(item.code);
+    return [i+1, item.code, item.name, bal.qty, bal.val.toFixed(2)];
+  });
+  const wb = makeWorkbook('الأصناف', headers, rows, 'قائمة الأصناف المكودة - نظام FIFO');
+  XLSX.writeFile(wb, 'الأصناف_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  toast('✅ تم تصدير Excel بنجاح');
+}
+
+function exportInExcel() {
+  const headers = ['#','التاريخ','الكود','الصنف','سعر الوحدة','الكمية','الإجمالي','متاح (كمية)','متاح (قيمة)'];
+  const rows = [...db.inTrans].sort((a,b) => b.date.localeCompare(a.date)).map((t,i) =>
+    [i+1, t.date, t.code, t.name, t.price, t.qty, t.total, t.availQty, t.availVal]);
+  const wb = makeWorkbook('الواردات', headers, rows, 'سجل الواردات - نظام FIFO');
+  XLSX.writeFile(wb, 'الواردات_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+
+function exportOutExcel() {
+  const headers = ['#','التاريخ','الكود','الصنف','الكمية المنصرفة','الإجمالي','متاح (كمية)','متاح (قيمة)'];
+  const rows = [...db.outTrans].sort((a,b) => b.date.localeCompare(a.date)).map((t,i) =>
+    [i+1, t.date, t.code, t.name, t.qty, t.total, t.availQty, t.availVal]);
+  const wb = makeWorkbook('المنصرفات', headers, rows, 'سجل المنصرفات - نظام FIFO');
+  XLSX.writeFile(wb, 'المنصرفات_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+
+function exportCardExcel() {
+  const code = document.getElementById('cardCode').value;
+  if (!code) { toast('اختر صنفاً أولاً', 'error'); return; }
+  const headers = ['#','التاريخ','نوع الحركة','الكمية الواردة','قيمة الوارد','الكمية المنصرفة','قيمة المنصرف','الرصيد (كمية)','الرصيد (قيمة)'];
+  let movements = [];
+  db.inTrans.filter(t=>t.code===code).forEach(t => movements.push({date:t.date,type:'وارد',inQ:parseInt(t.qty),inV:parseFloat(t.total),outQ:0,outV:0}));
+  db.outTrans.filter(t=>t.code===code).forEach(t => movements.push({date:t.date,type:'منصرف',inQ:0,inV:0,outQ:parseInt(t.qty),outV:parseFloat(t.total)}));
+  movements.sort((a,b)=>a.date.localeCompare(b.date));
+  let rQ=0,rV=0;
+  const rows = movements.map((m,i) => {
+    rQ+=m.inQ-m.outQ; rV+=m.inV-m.outV;
+    return [i+1,m.date,m.type,m.inQ||'',m.inV||'',m.outQ||'',m.outV||'',rQ,rV.toFixed(2)];
+  });
+  const item = db.items.find(i=>i.code===code);
+  const wb = makeWorkbook('كارت_'+code, headers, rows, 'كارت الصنف: '+(item?.name||code)+' - نظام FIFO');
+  XLSX.writeFile(wb, 'كارت_'+code+'_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+
+function exportMonthlyExcel() {
+  const month = document.getElementById('monthFilter').value;
+  if (!month) { toast('اختر الشهر أولاً','error'); return; }
+  const headers = ['#','الكود','الصنف','الوارد (كمية)','الوارد (قيمة)','المنصرف (كمية)','المنصرف (قيمة)','المتاح (كمية)','المتاح (قيمة)'];
+  const rows = db.items.map((item,i) => {
+    const ins = db.inTrans.filter(t=>t.code===item.code&&t.date.startsWith(month));
+    const outs = db.outTrans.filter(t=>t.code===item.code&&t.date.startsWith(month));
+    const inQ = ins.reduce((s,t)=>s+parseInt(t.qty),0);
+    const inV = ins.reduce((s,t)=>s+parseFloat(t.total),0);
+    const outQ = outs.reduce((s,t)=>s+parseInt(t.qty),0);
+    const outV = outs.reduce((s,t)=>s+parseFloat(t.total),0);
+    const bal = getBalance(item.code);
+    return [i+1,item.code,item.name,inQ,inV.toFixed(2),outQ,outV.toFixed(2),bal.qty,bal.val.toFixed(2)];
+  });
+  const wb = makeWorkbook('شهري', headers, rows, 'التقرير الشهري: '+month+' - نظام FIFO');
+  XLSX.writeFile(wb, 'تقرير_شهري_'+month+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+
+function exportGeneralExcel() {
+  const from = document.getElementById('genFrom').value;
+  const to = document.getElementById('genTo').value;
+  if (!from||!to) { toast('اختر الفترة أولاً','error'); return; }
+  const headers = ['#','الكود','الصنف','أول مدة (كمية)','أول مدة (قيمة)','وارد (كمية)','وارد (قيمة)','منصرف (كمية)','منصرف (قيمة)','آخر مدة (كمية)','آخر مدة (قيمة)'];
+  const rows = db.items.map((item,i) => {
+    const opIns = db.inTrans.filter(t=>t.code===item.code&&t.date<from);
+    const opOuts = db.outTrans.filter(t=>t.code===item.code&&t.date<from);
+    const opQ = opIns.reduce((s,t)=>s+parseInt(t.qty),0) - opOuts.reduce((s,t)=>s+parseInt(t.qty),0);
+    const opV = opIns.reduce((s,t)=>s+parseFloat(t.total),0) - opOuts.reduce((s,t)=>s+parseFloat(t.total),0);
+    const pIns = db.inTrans.filter(t=>t.code===item.code&&t.date>=from&&t.date<=to);
+    const pOuts = db.outTrans.filter(t=>t.code===item.code&&t.date>=from&&t.date<=to);
+    const pInQ = pIns.reduce((s,t)=>s+parseInt(t.qty),0);
+    const pInV = pIns.reduce((s,t)=>s+parseFloat(t.total),0);
+    const pOutQ = pOuts.reduce((s,t)=>s+parseInt(t.qty),0);
+    const pOutV = pOuts.reduce((s,t)=>s+parseFloat(t.total),0);
+    const clQ=opQ+pInQ-pOutQ, clV=opV+pInV-pOutV;
+    return [i+1,item.code,item.name,opQ,opV.toFixed(2),pInQ,pInV.toFixed(2),pOutQ,pOutV.toFixed(2),clQ,clV.toFixed(2)];
+  });
+  const wb = makeWorkbook('عام', headers, rows, 'التقرير العام: '+from+' إلى '+to+' - نظام FIFO');
+  XLSX.writeFile(wb, 'تقرير_عام_'+from+'_'+to+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+</script>
+</body>
+</html>
