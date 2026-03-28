@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة المخزن FIFO</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --primary:#0f2942; --primary2:#1a3c5e; --primary3:#2563a8;
+  --accent:#f0a500; --accent2:#ffd166;
+  --success:#06d6a0; --danger:#ef476f; --warning:#ffd166;
+  --bg:#eef2f7; --card:#fff; --text:#1e293b; --muted:#64748b;
+  --border:#e2e8f0; --sidebar:260px;
+  --admin:#7c3aed; --manager:#2563a8; --viewer:#059669; --accountant:#d97706;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Cairo',sans-serif;background:var(--bg);color:var(--text);direction:rtl;min-height:100vh}
+
+/* ── LOGIN SCREEN ── */
+#loginScreen{
+  display:flex;align-items:center;justify-content:center;
+  min-height:100vh;
+  background:linear-gradient(135deg,#0a1628 0%,#0f2942 50%,#1a3c5e 100%);
+  position:fixed;inset:0;z-index:9999;
+}
+.login-box{
+  background:#fff;border-radius:24px;padding:48px 40px;width:420px;
+  box-shadow:0 32px 80px rgba(0,0,0,0.4);
+  animation:slideUp .5s ease;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+.login-logo{text-align:center;margin-bottom:32px}
+.login-logo .icon{
+  width:72px;height:72px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:20px;margin:0 auto 16px;
+  display:flex;align-items:center;justify-content:center;font-size:34px;
+  box-shadow:0 8px 24px rgba(240,165,0,.4);
+}
+.login-logo h1{font-size:22px;font-weight:900;color:var(--primary)}
+.login-logo p{font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:1px}
+.login-field{margin-bottom:18px}
+.login-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:.5px}
+.login-field input{
+  width:100%;padding:13px 16px;border:2px solid var(--border);
+  border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;
+  direction:rtl;transition:all .2s;background:#f8fafc;
+}
+.login-field input:focus{outline:none;border-color:var(--primary3);background:#fff;box-shadow:0 0 0 4px rgba(37,99,168,.1)}
+.login-err{background:#fee2e2;color:#991b1b;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;display:none}
+.btn-login{
+  width:100%;padding:14px;border:none;border-radius:12px;
+  background:linear-gradient(135deg,var(--primary3),var(--primary));
+  color:#fff;font-family:'Cairo',sans-serif;font-size:15px;font-weight:800;
+  cursor:pointer;transition:all .2s;
+  box-shadow:0 6px 20px rgba(37,99,168,.35);
+}
+.btn-login:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,99,168,.45)}
+
+/* ── APP SHELL ── */
+#appShell{display:none}
+.sidebar{
+  position:fixed;right:0;top:0;bottom:0;width:var(--sidebar);
+  background:linear-gradient(160deg,#07192e,#0f2942 60%,#1a3c5e);
+  z-index:100;display:flex;flex-direction:column;
+  box-shadow:-4px 0 24px rgba(0,0,0,.35);
+}
+.sidebar-top{padding:22px 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.s-logo{display:flex;align-items:center;gap:12px}
+.s-logo .icon{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.s-logo h2{color:#fff;font-size:14px;font-weight:800;line-height:1.3}
+.s-logo p{color:var(--accent2);font-size:10px;letter-spacing:1px}
+.sidebar-user{
+  margin:14px 12px;background:rgba(255,255,255,.07);
+  border-radius:12px;padding:12px 14px;border:1px solid rgba(255,255,255,.1);
+}
+.su-name{color:#fff;font-weight:700;font-size:13px}
+.su-role{font-size:11px;margin-top:3px;font-weight:600;padding:2px 8px;border-radius:20px;display:inline-block}
+.role-admin{background:rgba(124,58,237,.25);color:#c4b5fd}
+.role-storemanager{background:rgba(37,99,168,.3);color:#93c5fd}
+.role-viewer{background:rgba(5,150,105,.25);color:#6ee7b7}
+.role-accountant{background:rgba(217,119,6,.25);color:#fcd34d}
+
+/* Year Selector */
+.year-selector{margin:0 12px 8px;display:flex;align-items:center;gap:8px}
+.year-selector select{
+  flex:1;padding:8px 12px;border-radius:10px;border:none;
+  background:rgba(255,255,255,.12);color:#fff;
+  font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;
+  cursor:pointer;
+}
+.year-selector select option{background:#1a3c5e;color:#fff}
+.btn-add-year{
+  width:34px;height:34px;border-radius:10px;border:none;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:var(--primary);font-size:18px;cursor:pointer;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+
+.nav-section{flex:1;overflow-y:auto;padding:8px 10px}
+.nav-label{font-size:9.5px;color:rgba(255,255,255,.35);font-weight:700;letter-spacing:1.5px;padding:0 8px;margin:14px 0 5px}
+.nav-btn{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:10px 12px;border-radius:10px;border:none;
+  background:transparent;color:rgba(255,255,255,.7);
+  font-family:'Cairo',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .2s;text-align:right;margin-bottom:2px;
+}
+.nav-btn:hover{background:rgba(255,255,255,.09);color:#fff}
+.nav-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--primary);font-weight:800}
+.nav-btn .ni{font-size:17px;width:20px;text-align:center}
+.nav-btn.hidden{display:none}
+
+.sidebar-bottom{padding:12px;border-top:1px solid rgba(255,255,255,.08)}
+.btn-logout{
+  width:100%;padding:10px;border-radius:10px;border:none;
+  background:rgba(239,71,111,.15);color:#fca5a5;
+  font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;
+  transition:all .2s;
+}
+.btn-logout:hover{background:rgba(239,71,111,.3)}
+
+/* ── MAIN ── */
+.main{margin-right:var(--sidebar);min-height:100vh;display:flex;flex-direction:column}
+.topbar{
+  background:var(--card);padding:14px 26px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:2px solid var(--border);position:sticky;top:0;z-index:50;
+  box-shadow:0 2px 12px rgba(0,0,0,.06);
+}
+.topbar h1{font-size:19px;font-weight:800;color:var(--primary);display:flex;align-items:center;gap:8px}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.year-badge{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:var(--primary);padding:5px 14px;border-radius:20px;
+  font-size:13px;font-weight:800;
+}
+.date-badge{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;color:var(--muted);font-weight:600}
+
+.content{padding:26px;flex:1}
+.page{display:none}.page.active{display:block}
+
+/* ── CARDS ── */
+.card{background:var(--card);border-radius:16px;padding:22px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:20px;border:1px solid var(--border)}
+.card-title{font-size:15px;font-weight:800;color:var(--primary);margin-bottom:16px;padding-bottom:11px;border-bottom:2px solid var(--accent);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-title-left{display:flex;align-items:center;gap:8px}
+
+/* ── FORM ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.fg input,.fg select{
+  padding:9px 13px;border:2px solid var(--border);border-radius:10px;
+  font-family:'Cairo',sans-serif;font-size:13.5px;color:var(--text);
+  background:var(--bg);transition:all .2s;direction:rtl;
+}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--primary3);background:#fff;box-shadow:0 0 0 3px rgba(37,99,168,.1)}
+.fg input[readonly]{background:#f1f5f9;color:var(--primary);font-weight:700}
+.fg input[type=password]{letter-spacing:2px}
+
+/* ── BUTTONS ── */
+.btn{padding:9px 20px;border-radius:10px;border:none;font-family:'Cairo',sans-serif;font-size:13.5px;font-weight:700;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:linear-gradient(135deg,var(--primary3),var(--primary));color:#fff;box-shadow:0 4px 12px rgba(37,99,168,.3)}
+.btn-success{background:linear-gradient(135deg,#05c08e,#06d6a0);color:#fff;box-shadow:0 4px 12px rgba(6,214,160,.3)}
+.btn-danger{background:linear-gradient(135deg,#d63060,var(--danger));color:#fff}
+.btn-excel{background:linear-gradient(135deg,#1d7044,#217346);color:#fff;box-shadow:0 4px 12px rgba(33,115,70,.3)}
+.btn-accent{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--primary)}
+.btn-sm{padding:5px 12px;font-size:12px;border-radius:8px}
+.btn-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ── TABLE ── */
+.tw{overflow-x:auto;border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:linear-gradient(135deg,var(--primary),var(--primary3));color:#fff;padding:11px 13px;font-weight:700;text-align:center;white-space:nowrap;font-size:12px}
+thead th:first-child{border-radius:0 10px 0 0}thead th:last-child{border-radius:10px 0 0 0}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s}
+tbody tr:hover{background:#f8faff}
+tbody td{padding:10px 13px;text-align:center;font-size:13px}
+.tfoot-row td{background:linear-gradient(135deg,#f0f4f8,#e8edf5);font-weight:800;color:var(--primary);border-top:2px solid var(--primary);font-size:13px}
+
+/* ── STATS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:14px;margin-bottom:20px}
+.stat-card{background:var(--card);border-radius:14px;padding:18px;text-align:center;border:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,.05);position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;right:0;left:0;height:4px}
+.sc-blue::before{background:linear-gradient(90deg,var(--primary3),var(--primary))}
+.sc-green::before{background:linear-gradient(90deg,#05c08e,var(--success))}
+.sc-orange::before{background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.sc-red::before{background:linear-gradient(90deg,#d63060,var(--danger))}
+.sc-purple::before{background:linear-gradient(90deg,#7c3aed,#a78bfa)}
+.stat-icon{font-size:26px;margin-bottom:6px}
+.stat-label{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
+.stat-value{font-size:21px;font-weight:900;color:var(--primary)}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* ── BADGE ── */
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.bi{background:#d1fae5;color:#065f46}.bo{background:#fee2e2;color:#991b1b}
+
+/* ── USER MANAGEMENT ── */
+.user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.user-card{
+  background:var(--card);border-radius:14px;padding:18px;
+  border:1px solid var(--border);box-shadow:0 2px 10px rgba(0,0,0,.05);
+  position:relative;overflow:hidden;
+}
+.user-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+.uc-admin::before{background:linear-gradient(90deg,#7c3aed,#a78bfa)}
+.uc-storemanager::before{background:linear-gradient(90deg,#2563a8,#60a5fa)}
+.uc-viewer::before{background:linear-gradient(90deg,#059669,#34d399)}
+.uc-accountant::before{background:linear-gradient(90deg,#d97706,#fbbf24)}
+.uc-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.uc-avatar{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;flex-shrink:0}
+.av-admin{background:#ede9fe;color:#7c3aed}
+.av-storemanager{background:#dbeafe;color:#2563a8}
+.av-viewer{background:#d1fae5;color:#059669}
+.av-accountant{background:#fef3c7;color:#d97706}
+.uc-name{font-weight:800;font-size:14px;color:var(--primary)}
+.uc-username{font-size:12px;color:var(--muted)}
+.uc-footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:5px}
+.dot-on{background:#06d6a0}.dot-off{background:#ef476f}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:20px;padding:32px;width:460px;max-width:95vw;box-shadow:0 24px 60px rgba(0,0,0,.3);animation:slideUp .25s ease}
+.modal h3{font-size:17px;font-weight:800;color:var(--primary);margin-bottom:22px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+
+/* ── ROLLOVER CARD ── */
+.rollover-card{
+  background:linear-gradient(135deg,#0f2942,#1a3c5e);
+  border-radius:16px;padding:24px;color:#fff;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;
+}
+.rc-text h3{font-size:16px;font-weight:800;margin-bottom:4px}
+.rc-text p{font-size:13px;color:rgba(255,255,255,.65)}
+
+/* ── LOADING ── */
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TOAST ── */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);padding:11px 22px;border-radius:30px;font-size:14px;font-weight:700;z-index:99999;transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.success{background:linear-gradient(135deg,#05c08e,#06d6a0);color:#fff}
+.toast.error{background:linear-gradient(135deg,#d63060,#ef476f);color:#fff}
+.toast.info{background:linear-gradient(135deg,var(--primary3),var(--primary));color:#fff}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:44px 20px;color:var(--muted)}
+.empty-icon{font-size:44px;margin-bottom:10px}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+
+/* ── PERMISSION CHIP ── */
+.perm-chip{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;margin:2px}
+.pc-yes{background:#d1fae5;color:#065f46}.pc-no{background:#fee2e2;color:#991b1b}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN SCREEN ══════════════ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="icon">🏭</div>
+      <h1>نظام إدارة المخزن</h1>
+      <p>FIFO INVENTORY SYSTEM</p>
+    </div>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-field">
+      <label>اسم المستخدم</label>
+      <input type="text" id="loginUser" placeholder="أدخل اسم المستخدم" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label>كلمة المرور</label>
+      <input type="password" id="loginPass" placeholder="أدخل كلمة المرور" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">🔐 دخول</button>
+  </div>
+</div>
+
+<!-- ══════════════ APP SHELL ══════════════ -->
+<div id="appShell">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="s-logo">
+        <div class="icon">🏭</div>
+        <div><h2>نظام المخزن</h2><p>FIFO SYSTEM</p></div>
+      </div>
+    </div>
+
+    <div class="sidebar-user">
+      <div class="su-name" id="sb-name">—</div>
+      <span class="su-role" id="sb-role-badge">—</span>
+    </div>
+
+    <!-- Year selector -->
+    <div class="year-selector">
+      <select id="yearSelect" onchange="onYearChange()"></select>
+      <button class="btn-add-year" onclick="showAddYearModal()" title="إضافة سنة جديدة">＋</button>
+    </div>
+
+    <nav class="nav-section">
+      <div class="nav-label">الإعدادات</div>
+      <button class="nav-btn" id="nav-items" onclick="showPage('items')"><span class="ni">🏷️</span> تكويد الأصناف</button>
+
+      <div class="nav-label">الحركات</div>
+      <button class="nav-btn" id="nav-in" onclick="showPage('in')"><span class="ni">📥</span> إضافة الأصناف</button>
+      <button class="nav-btn" id="nav-out" onclick="showPage('out')"><span class="ni">📤</span> منصرف الأصناف</button>
+
+      <div class="nav-label">التقارير</div>
+      <button class="nav-btn" id="nav-card" onclick="showPage('card')"><span class="ni">📋</span> كارت الصنف</button>
+      <button class="nav-btn" id="nav-monthly" onclick="showPage('monthly')"><span class="ni">📅</span> التقرير الشهري</button>
+      <button class="nav-btn" id="nav-general" onclick="showPage('general')"><span class="ni">📊</span> التقرير العام</button>
+
+      <div class="nav-label" id="nav-admin-label">الإدارة</div>
+      <button class="nav-btn" id="nav-users" onclick="showPage('users')"><span class="ni">👥</span> إدارة المستخدمين</button>
+      <button class="nav-btn" id="nav-years" onclick="showPage('years')"><span class="ni">📆</span> إدارة السنوات</button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <button class="btn-logout" onclick="doLogout()">🚪 تسجيل الخروج</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1 id="pageTitle">—</h1>
+      <div class="topbar-right">
+        <span class="year-badge" id="tb-year">—</span>
+        <span class="date-badge" id="todayDate">—</span>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ═══ ITEMS ═══ -->
+      <div class="page" id="page-items">
+        <div class="card" id="addItemCard">
+          <div class="card-title"><span class="card-title-left">➕ إضافة صنف جديد</span></div>
+          <div class="form-grid" style="grid-template-columns:1fr 2fr">
+            <div class="fg"><label>كود الصنف</label><input type="text" id="itemCode" placeholder="مثال: ITM-001"></div>
+            <div class="fg"><label>اسم الصنف</label><input type="text" id="itemName" placeholder="اسم الصنف"></div>
+          </div>
+          <div class="btn-actions">
+            <button class="btn btn-primary" onclick="addItem()">💾 حفظ الصنف</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span class="card-title-left">🏷️ قائمة الأصناف</span>
+            <button class="btn btn-excel btn-sm" onclick="exportItemsExcel()">📥 Excel</button>
+          </div>
+          <div class="tw"><table><thead><tr><th>#</th><th>الكود</th><th>الاسم</th><th>الكمية المتاحة</th><th>القيمة المتاحة</th><th id="itemsActCol">إجراءات</th></tr></thead><tbody id="itemsTable"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ IN ═══ -->
+      <div class="page" id="page-in">
+        <div class="card" id="addInCard">
+          <div class="card-title"><span class="card-title-left">📥 تسجيل وارد جديد</span></div>
+          <div class="form-grid">
+            <div class="fg"><label>التاريخ</label><input type="date" id="inDate"></div>
+            <div class="fg"><label>كود الصنف</label><select id="inCode" onchange="fillInName()"><option value="">-- اختر --</option></select></div>
+            <div class="fg"><label>اسم الصنف</label><input type="text" id="inName" readonly></div>
+            <div class="fg"><label>سعر الوحدة</label><input type="number" id="inPrice" placeholder="0.00" oninput="calcInTotal()"></div>
+            <div class="fg"><label>عدد الوحدات</label><input type="number" id="inQty" placeholder="0" oninput="calcInTotal()"></div>
+            <div class="fg"><label>الإجمالي</label><input type="number" id="inTotal" readonly></div>
+            <div class="fg"><label>المتاح (كمية)</label><input type="number" id="inAvailQty" readonly></div>
+            <div class="fg"><label>المتاح (قيمة)</label><input type="number" id="inAvailVal" readonly></div>
+          </div>
+          <div class="btn-actions"><button class="btn btn-success" onclick="addInTrans()">✅ تسجيل الوارد</button></div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span class="card-title-left">📥 سجل الواردات</span>
+            <button class="btn btn-excel btn-sm" onclick="exportInExcel()">📥 Excel</button>
+          </div>
+          <div class="tw"><table><thead><tr><th>#</th><th>التاريخ</th><th>الكود</th><th>الصنف</th><th>سعر الوحدة</th><th>الكمية</th><th>الإجمالي</th><th id="inActCol">حذف</th></tr></thead><tbody id="inTable"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ OUT ═══ -->
+      <div class="page" id="page-out">
+        <div class="card" id="addOutCard">
+          <div class="card-title"><span class="card-title-left">📤 تسجيل منصرف</span></div>
+          <div class="form-grid">
+            <div class="fg"><label>التاريخ</label><input type="date" id="outDate"></div>
+            <div class="fg"><label>كود الصنف</label><select id="outCode" onchange="fillOutName()"><option value="">-- اختر --</option></select></div>
+            <div class="fg"><label>اسم الصنف</label><input type="text" id="outName" readonly></div>
+            <div class="fg"><label>عدد الوحدات</label><input type="number" id="outQty" placeholder="0" oninput="calcOutTotal()"></div>
+            <div class="fg"><label>الإجمالي (FIFO)</label><input type="text" id="outTotal" readonly></div>
+            <div class="fg"><label>المتاح (كمية)</label><input type="number" id="outAvailQty" readonly></div>
+            <div class="fg"><label>المتاح (قيمة)</label><input type="number" id="outAvailVal" readonly></div>
+          </div>
+          <div class="btn-actions"><button class="btn btn-danger" onclick="addOutTrans()">🔴 تسجيل المنصرف</button></div>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span class="card-title-left">📤 سجل المنصرفات</span>
+            <button class="btn btn-excel btn-sm" onclick="exportOutExcel()">📥 Excel</button>
+          </div>
+          <div class="tw"><table><thead><tr><th>#</th><th>التاريخ</th><th>الكود</th><th>الصنف</th><th>الكمية</th><th>الإجمالي</th><th id="outActCol">حذف</th></tr></thead><tbody id="outTable"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ CARD ═══ -->
+      <div class="page" id="page-card">
+        <div class="card">
+          <div class="card-title"><span class="card-title-left">📋 كارت الصنف</span>
+            <button class="btn btn-excel btn-sm" onclick="exportCardExcel()">📥 Excel</button>
+          </div>
+          <div class="filter-bar">
+            <div class="fg" style="min-width:220px"><label>الصنف</label>
+              <select id="cardCode" onchange="loadCard()"><option value="">-- اختر --</option></select></div>
+          </div>
+        </div>
+        <div class="stats-grid" id="cardStats" style="display:none">
+          <div class="stat-card sc-blue"><div class="stat-icon">📥</div><div class="stat-label">إجمالي الوارد</div><div class="stat-value" id="cs-inQty">0</div><div class="stat-sub" id="cs-inVal">قيمة: 0</div></div>
+          <div class="stat-card sc-red"><div class="stat-icon">📤</div><div class="stat-label">إجمالي المنصرف</div><div class="stat-value" id="cs-outQty">0</div><div class="stat-sub" id="cs-outVal">قيمة: 0</div></div>
+          <div class="stat-card sc-green"><div class="stat-icon">📦</div><div class="stat-label">الرصيد المتاح</div><div class="stat-value" id="cs-balQty">0</div><div class="stat-sub" id="cs-balVal">قيمة: 0</div></div>
+          <div class="stat-card sc-orange"><div class="stat-icon">🏁</div><div class="stat-label">رصيد أول المدة</div><div class="stat-value" id="cs-opQty">0</div><div class="stat-sub" id="cs-opVal">قيمة: 0</div></div>
+        </div>
+        <div class="card" id="cardTableWrap" style="display:none">
+          <div class="card-title"><span>تفاصيل الحركات</span></div>
+          <div class="tw"><table><thead><tr><th>#</th><th>التاريخ</th><th>نوع الحركة</th><th>وارد (كمية)</th><th>وارد (قيمة)</th><th>منصرف (كمية)</th><th>منصرف (قيمة)</th><th>رصيد (كمية)</th><th>رصيد (قيمة)</th></tr></thead><tbody id="cardBody"></tbody><tfoot><tr class="tfoot-row" id="cardFoot"></tr></tfoot></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ MONTHLY ═══ -->
+      <div class="page" id="page-monthly">
+        <div class="card">
+          <div class="card-title"><span class="card-title-left">📅 التقرير الشهري</span>
+            <button class="btn btn-excel btn-sm" onclick="exportMonthlyExcel()">📥 Excel</button>
+          </div>
+          <div class="filter-bar">
+            <div class="fg"><label>الشهر</label><input type="month" id="monthFilter" onchange="loadMonthly()"></div>
+          </div>
+          <div class="tw"><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>وارد (كمية)</th><th>وارد (قيمة)</th><th>منصرف (كمية)</th><th>منصرف (قيمة)</th><th>متاح (كمية)</th><th>متاح (قيمة)</th></tr></thead><tbody id="monthlyBody"></tbody><tfoot><tr class="tfoot-row" id="monthlyFoot"></tr></tfoot></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ GENERAL ═══ -->
+      <div class="page" id="page-general">
+        <div class="card">
+          <div class="card-title"><span class="card-title-left">📊 التقرير العام</span>
+            <button class="btn btn-excel btn-sm" onclick="exportGeneralExcel()">📥 Excel</button>
+          </div>
+          <div class="filter-bar">
+            <div class="fg"><label>من تاريخ</label><input type="date" id="genFrom" onchange="loadGeneral()"></div>
+            <div class="fg"><label>إلى تاريخ</label><input type="date" id="genTo" onchange="loadGeneral()"></div>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card sc-blue"><div class="stat-icon">🏁</div><div class="stat-label">رصيد أول المدة</div><div class="stat-value" id="gen-opQty">0</div><div class="stat-sub" id="gen-opVal">قيمة: 0</div></div>
+          <div class="stat-card sc-green"><div class="stat-icon">📥</div><div class="stat-label">الوارد خلال المدة</div><div class="stat-value" id="gen-inQty">0</div><div class="stat-sub" id="gen-inVal">قيمة: 0</div></div>
+          <div class="stat-card sc-orange"><div class="stat-icon">📤</div><div class="stat-label">المنصرف خلال المدة</div><div class="stat-value" id="gen-outQty">0</div><div class="stat-sub" id="gen-outVal">قيمة: 0</div></div>
+          <div class="stat-card sc-red"><div class="stat-icon">🔚</div><div class="stat-label">رصيد آخر المدة</div><div class="stat-value" id="gen-clQty">0</div><div class="stat-sub" id="gen-clVal">قيمة: 0</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>تفاصيل كل الأصناف</span></div>
+          <div class="tw"><table><thead><tr><th>#</th><th>الكود</th><th>الصنف</th><th>أول مدة (ك)</th><th>أول مدة (ق)</th><th>وارد (ك)</th><th>وارد (ق)</th><th>منصرف (ك)</th><th>منصرف (ق)</th><th>آخر مدة (ك)</th><th>آخر مدة (ق)</th></tr></thead><tbody id="generalBody"></tbody><tfoot><tr class="tfoot-row" id="generalFoot"></tr></tfoot></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ USERS ═══ -->
+      <div class="page" id="page-users">
+        <div class="card">
+          <div class="card-title">
+            <span class="card-title-left">👥 إدارة المستخدمين</span>
+            <button class="btn btn-primary btn-sm" onclick="showAddUserModal()">➕ إضافة مستخدم</button>
+          </div>
+          <div class="user-grid" id="usersGrid"></div>
+        </div>
+
+        <!-- Role permissions table -->
+        <div class="card">
+          <div class="card-title"><span class="card-title-left">🔐 صلاحيات الأدوار</span></div>
+          <div class="tw"><table><thead><tr><th>الصلاحية</th><th>👑 Admin</th><th>🏭 مدير مخزن</th><th>👁️ مشاهدة فقط</th><th>📊 محاسب</th></tr></thead>
+          <tbody>
+            <tr><td>تكويد الأصناف (إضافة/حذف)</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td></tr>
+            <tr><td>تسجيل الواردات والمنصرفات</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td></tr>
+            <tr><td>حذف الحركات</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td></tr>
+            <tr><td>عرض التقارير</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td></tr>
+            <tr><td>تصدير Excel</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-yes">✓ نعم</span></td></tr>
+            <tr><td>إدارة المستخدمين</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td></tr>
+            <tr><td>إدارة السنوات والترحيل</td><td><span class="perm-chip pc-yes">✓ نعم</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td><td><span class="perm-chip pc-no">✗ لا</span></td></tr>
+          </tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ═══ YEARS ═══ -->
+      <div class="page" id="page-years">
+        <div class="rollover-card">
+          <div class="rc-text">
+            <h3>🔄 ترحيل رصيد نهاية السنة</h3>
+            <p>رصيد ديسمبر ينتقل تلقائياً كرصيد أول مدة يناير السنة الجديدة</p>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div class="fg"><label style="color:rgba(255,255,255,.6)">من سنة</label>
+              <select id="rollFrom" style="padding:8px 12px;border-radius:10px;border:none;background:rgba(255,255,255,.15);color:#fff;font-family:'Cairo',sans-serif;font-size:13px;min-width:100px"></select></div>
+            <button class="btn btn-accent" onclick="doRollover()" style="margin-top:18px">🔄 ترحيل الآن</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span class="card-title-left">📆 السنوات المتاحة</span>
+            <button class="btn btn-primary btn-sm" onclick="showAddYearModal()">➕ سنة جديدة</button>
+          </div>
+          <div class="tw"><table><thead><tr><th>السنة</th><th>عدد الأصناف</th><th>عدد الواردات</th><th>عدد المنصرفات</th><th>حالة الترحيل</th></tr></thead><tbody id="yearsTable"></tbody></table></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div><!-- /appShell -->
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast"></div>
+
+<!-- ══ ADD USER MODAL ══ -->
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal">
+    <h3>👤 إضافة / تعديل مستخدم</h3>
+    <input type="hidden" id="editUsername">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="fg"><label>اسم المستخدم (Login)</label><input type="text" id="u-username" placeholder="بالإنجليزية فقط"></div>
+      <div class="fg"><label>الاسم الكامل</label><input type="text" id="u-name" placeholder="الاسم بالعربي"></div>
+      <div class="fg"><label>كلمة المرور</label><input type="password" id="u-pass" placeholder="اتركها فارغة للإبقاء على القديمة"></div>
+      <div class="fg"><label>الدور</label>
+        <select id="u-role">
+          <option value="admin">👑 Admin — مدير عام</option>
+          <option value="storemanager">🏭 مدير مخزن</option>
+          <option value="viewer">👁️ مشاهدة فقط</option>
+          <option value="accountant">📊 محاسب</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:8px">
+      <label>الحالة</label>
+      <select id="u-active">
+        <option value="true">✅ نشط</option>
+        <option value="false">🔴 موقوف</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--border)" onclick="closeModal('addUserModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveUser()">💾 حفظ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD YEAR MODAL ══ -->
+<div class="modal-overlay" id="addYearModal">
+  <div class="modal">
+    <h3>📆 إضافة سنة جديدة</h3>
+    <div class="fg" style="margin-bottom:16px">
+      <label>السنة</label>
+      <input type="number" id="newYear" placeholder="مثال: 2026" min="2000" max="2100">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--border)" onclick="closeModal('addYearModal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="doAddYear()">➕ إنشاء</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  CONFIG — ضع رابط Google Apps Script هنا
+// ══════════════════════════════════════════════════════
+const API_URL = 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let state = {
+  token: localStorage.getItem('fifo_token') || null,
+  user: JSON.parse(localStorage.getItem('fifo_user') || 'null'),
+  year: parseInt(localStorage.getItem('fifo_year')) || new Date().getFullYear(),
+  items: [], inTrans: [], outTrans: [], opening: []
+};
+
+// ══════════════════════════════════════════════════════
+//  API CALL
+// ══════════════════════════════════════════════════════
+async function api(action, body = {}) {
+  try {
+    const payload = {...body, action, token: state.token};
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+      mode: 'cors'
+    });
+    return await res.json();
+  } catch(e) {
+    return {ok: false, msg: 'خطأ في الاتصال: ' + e.message};
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════════════
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  if (!username || !password) { showLoginErr('أدخل اسم المستخدم وكلمة المرور'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.innerHTML = '<span class="spinner"></span> جاري الدخول...';
+  btn.disabled = true;
+  const r = await api('login', {username, password});
+  btn.innerHTML = '🔐 دخول'; btn.disabled = false;
+  if (!r.ok) { showLoginErr(r.msg); return; }
+  state.token = r.token;
+  state.user = r.user;
+  localStorage.setItem('fifo_token', r.token);
+  localStorage.setItem('fifo_user', JSON.stringify(r.user));
+  document.getElementById('loginErr').style.display = 'none';
+  initApp();
+}
+
+function showLoginErr(msg) {
+  const el = document.getElementById('loginErr');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+function doLogout() {
+  localStorage.removeItem('fifo_token');
+  localStorage.removeItem('fifo_user');
+  state.token = null; state.user = null;
+  document.getElementById('appShell').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+}
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+async function initApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'block';
+
+  // Update sidebar user info
+  const u = state.user;
+  document.getElementById('sb-name').textContent = u.name;
+  const roleLabels = {admin:'👑 مدير عام', storemanager:'🏭 مدير مخزن', viewer:'👁️ مشاهدة فقط', accountant:'📊 محاسب'};
+  const roleBadge = document.getElementById('sb-role-badge');
+  roleBadge.textContent = roleLabels[u.role] || u.role;
+  roleBadge.className = 'su-role role-' + u.role;
+
+  // Date
+  document.getElementById('todayDate').textContent = new Date().toLocaleDateString('ar-EG', {weekday:'short',year:'numeric',month:'short',day:'numeric'});
+
+  // Apply permissions to nav
+  applyNavPermissions();
+
+  // Load years
+  await loadYears();
+
+  // Load data for current year
+  await loadYearData();
+
+  // Default page
+  showPage('items');
+}
+
+function applyNavPermissions() {
+  const r = state.user.role;
+  const isAdmin = r === 'admin';
+  const canWrite = r === 'admin' || r === 'storemanager';
+  const canExport = r === 'admin' || r === 'storemanager' || r === 'accountant';
+
+  // Admin-only nav
+  document.getElementById('nav-users').style.display = isAdmin ? '' : 'none';
+  document.getElementById('nav-years').style.display = isAdmin ? '' : 'none';
+  document.getElementById('nav-admin-label').style.display = isAdmin ? '' : 'none';
+  document.getElementById('addItemCard').style.display = canWrite ? '' : 'none';
+  document.getElementById('addInCard').style.display = canWrite ? '' : 'none';
+  document.getElementById('addOutCard').style.display = canWrite ? '' : 'none';
+  document.getElementById('itemsActCol').style.display = isAdmin ? '' : 'none';
+  document.getElementById('inActCol').style.display = canWrite ? '' : 'none';
+  document.getElementById('outActCol').style.display = canWrite ? '' : 'none';
+}
+
+// ══════════════════════════════════════════════════════
+//  YEARS
+// ══════════════════════════════════════════════════════
+async function loadYears() {
+  const r = await api('getYears');
+  if (!r.ok) return;
+  const years = r.years.length ? r.years : [new Date().getFullYear()];
+  const sel = document.getElementById('yearSelect');
+  const rollFrom = document.getElementById('rollFrom');
+  sel.innerHTML = years.map(y => `<option value="${y}" ${y===state.year?'selected':''}>${y}</option>`).join('');
+  rollFrom.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+  document.getElementById('tb-year').textContent = 'سنة ' + state.year;
+}
+
+async function onYearChange() {
+  state.year = parseInt(document.getElementById('yearSelect').value);
+  localStorage.setItem('fifo_year', state.year);
+  document.getElementById('tb-year').textContent = 'سنة ' + state.year;
+  await loadYearData();
+  // refresh current page
+  const active = document.querySelector('.page.active');
+  if (active) {
+    const id = active.id.replace('page-','');
+    if (id==='card') loadCard();
+    else if (id==='monthly') loadMonthly();
+    else if (id==='general') loadGeneral();
+    else renderCurrentPage(id);
+  }
+}
+
+async function loadYearData() {
+  toast('جاري تحميل بيانات ' + state.year + '...', 'info');
+  const [itemsR, inR, outR, openR] = await Promise.all([
+    api('getItems', {year: state.year}),
+    api('getInTrans', {year: state.year}),
+    api('getOutTrans', {year: state.year}),
+    api('getOpeningBalance', {year: state.year})
+  ]);
+  if (itemsR.ok) state.items = itemsR.items;
+  if (inR.ok) state.inTrans = inR.trans;
+  if (outR.ok) state.outTrans = outR.trans;
+  if (openR.ok) state.opening = openR.opening;
+
+  renderItemsTable();
+  renderInTable();
+  renderOutTable();
+  refreshSelects();
+  setTodayDates();
+}
+
+async function showAddYearModal() {
+  document.getElementById('newYear').value = new Date().getFullYear() + 1;
+  document.getElementById('addYearModal').classList.add('show');
+}
+
+async function doAddYear() {
+  const year = parseInt(document.getElementById('newYear').value);
+  if (!year) { toast('أدخل سنة صحيحة', 'error'); return; }
+  const r = await api('initYear', {year});
+  if (!r.ok) { toast(r.msg, 'error'); return; }
+  closeModal('addYearModal');
+  toast('✅ تم إنشاء سنة ' + year);
+  await loadYears();
+  loadYearsTable();
+}
+
+async function doRollover() {
+  const fromYear = parseInt(document.getElementById('rollFrom').value);
+  if (!confirm(`هل تريد ترحيل رصيد ${fromYear} كرصيد أول مدة ${fromYear+1}؟`)) return;
+  const r = await api('rolloverYear', {fromYear});
+  if (!r.ok) { toast(r.msg, 'error'); return; }
+  toast(`✅ ${r.msg}`);
+  await loadYearData();
+  loadYearsTable();
+}
+
+async function loadYearsTable() {
+  const r = await api('getYears');
+  if (!r.ok) return;
+  const tbody = document.getElementById('yearsTable');
+  const rows = await Promise.all(r.years.map(async y => {
+    const [it, inT, outT, openT] = await Promise.all([
+      api('getItems', {year:y}), api('getInTrans', {year:y}),
+      api('getOutTrans', {year:y}), api('getOpeningBalance', {year:y})
+    ]);
+    const hasOpen = openT.ok && openT.opening.length > 0;
+    return `<tr>
+      <td><strong>${y}</strong></td>
+      <td>${it.ok ? it.items.length : '—'}</td>
+      <td>${inT.ok ? inT.trans.length : '—'}</td>
+      <td>${outT.ok ? outT.trans.length : '—'}</td>
+      <td>${hasOpen ? '<span class="badge bi">✓ تم الترحيل</span>' : '<span class="badge bo">لم يُرحَّل</span>'}</td>
+    </tr>`;
+  }));
+  tbody.innerHTML = rows.join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════════════
+const pageTitles = {items:'تكويد الأصناف',in:'إضافة الأصناف',out:'منصرف الأصناف',card:'كارت الصنف',monthly:'التقرير الشهري',general:'التقرير العام',users:'إدارة المستخدمين',years:'إدارة السنوات'};
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  const nb = document.getElementById('nav-'+id);
+  if (nb) nb.classList.add('active');
+  document.getElementById('pageTitle').textContent = pageTitles[id] || '';
+  if (id==='card') loadCard();
+  if (id==='monthly') loadMonthly();
+  if (id==='general') loadGeneral();
+  if (id==='users') loadUsers();
+  if (id==='years') loadYearsTable();
+}
+
+// ══════════════════════════════════════════════════════
+//  FIFO ENGINE (CLIENT-SIDE for display)
+// ══════════════════════════════════════════════════════
+function getFifoBalance(code) {
+  const op = state.opening.find(o => o.code === code);
+  let layers = [];
+  if (op && parseFloat(op.qty) > 0) {
+    const avg = parseFloat(op.qty) > 0 ? parseFloat(op.val) / parseFloat(op.qty) : 0;
+    layers.push({qty: parseFloat(op.qty), price: avg});
+  }
+  const ins = state.inTrans.filter(t=>t.code===code).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  ins.forEach(t => layers.push({qty: parseInt(t.qty), price: parseFloat(t.price)}));
+  const outs = state.outTrans.filter(t=>t.code===code).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  for (const out of outs) {
+    let rem = parseInt(out.qty);
+    for (let l of layers) { if(rem<=0)break; const take=Math.min(l.qty,rem); l.qty-=take; rem-=take; }
+    layers = layers.filter(l=>l.qty>0);
+  }
+  return {qty: layers.reduce((s,l)=>s+l.qty,0), val: layers.reduce((s,l)=>s+l.qty*l.price,0)};
+}
+
+function calcFifoCost(code, qty) {
+  const op = state.opening.find(o=>o.code===code);
+  let layers = [];
+  if (op && parseFloat(op.qty)>0) {
+    const avg = parseFloat(op.qty)>0 ? parseFloat(op.val)/parseFloat(op.qty) : 0;
+    layers.push({qty:parseFloat(op.qty), price:avg});
+  }
+  const ins = state.inTrans.filter(t=>t.code===code).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  ins.forEach(t=>layers.push({qty:parseInt(t.qty),price:parseFloat(t.price)}));
+  const outs = state.outTrans.filter(t=>t.code===code).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  for (const out of outs) {
+    let rem=parseInt(out.qty);
+    for(let l of layers){if(rem<=0)break;const take=Math.min(l.qty,rem);l.qty-=take;rem-=take;}
+    layers=layers.filter(l=>l.qty>0);
+  }
+  let cost=0,rem=qty;
+  for(let l of layers){if(rem<=0)break;const take=Math.min(l.qty,rem);cost+=take*l.price;rem-=take;}
+  if(rem>0) return null;
+  return cost;
+}
+
+// ══════════════════════════════════════════════════════
+//  ITEMS
+// ══════════════════════════════════════════════════════
+async function addItem() {
+  const code = document.getElementById('itemCode').value.trim();
+  const name = document.getElementById('itemName').value.trim();
+  if (!code||!name) { toast('أدخل الكود والاسم','error'); return; }
+  const r = await api('addItem', {year:state.year, code, name});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  document.getElementById('itemCode').value='';
+  document.getElementById('itemName').value='';
+  state.items.push({code,name});
+  renderItemsTable(); refreshSelects();
+  toast('✅ تم إضافة الصنف');
+}
+
+async function deleteItem(code) {
+  if (!confirm('حذف الصنف وكل حركاته؟')) return;
+  const r = await api('deleteItem', {year:state.year, code});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  state.items = state.items.filter(i=>i.code!==code);
+  renderItemsTable(); refreshSelects();
+  toast('تم الحذف','error');
+}
+
+function renderItemsTable() {
+  const tb = document.getElementById('itemsTable');
+  const canDelete = state.user?.role === 'admin';
+  if (!state.items.length) { tb.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد أصناف</p></div></td></tr>`; return; }
+  tb.innerHTML = state.items.map((item,i)=>{
+    const bal = getFifoBalance(item.code);
+    return `<tr>
+      <td>${i+1}</td><td><strong>${item.code}</strong></td><td>${item.name}</td>
+      <td><strong style="color:var(--primary)">${fmt(bal.qty)}</strong></td>
+      <td><strong style="color:var(--success)">${fmt(bal.val)} ج.م</strong></td>
+      <td>${canDelete?`<button class="btn btn-danger btn-sm" onclick="deleteItem('${item.code}')">🗑️</button>`:'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  IN TRANSACTIONS
+// ══════════════════════════════════════════════════════
+function fillInName() {
+  const code = document.getElementById('inCode').value;
+  const item = state.items.find(i=>i.code===code);
+  document.getElementById('inName').value = item?item.name:'';
+  if (code) { const b=getFifoBalance(code); document.getElementById('inAvailQty').value=b.qty; document.getElementById('inAvailVal').value=b.val.toFixed(2); }
+}
+
+function calcInTotal() {
+  const p=parseFloat(document.getElementById('inPrice').value)||0;
+  const q=parseInt(document.getElementById('inQty').value)||0;
+  document.getElementById('inTotal').value=(p*q).toFixed(2);
+}
+
+async function addInTrans() {
+  const date=document.getElementById('inDate').value;
+  const code=document.getElementById('inCode').value;
+  const name=document.getElementById('inName').value;
+  const price=parseFloat(document.getElementById('inPrice').value);
+  const qty=parseInt(document.getElementById('inQty').value);
+  if (!date||!code||!price||!qty) { toast('أكمل البيانات','error'); return; }
+  const r = await api('addInTrans', {year:state.year, date, code, name, price, qty});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  state.inTrans.push({id:r.id, date, code, name, price, qty, total:(price*qty).toFixed(2)});
+  renderInTable(); renderItemsTable();
+  document.getElementById('inPrice').value='';
+  document.getElementById('inQty').value='';
+  document.getElementById('inTotal').value='';
+  fillInName();
+  toast('✅ تم تسجيل الوارد');
+}
+
+async function deleteInTrans(id) {
+  if (!confirm('حذف هذه الحركة؟')) return;
+  const r = await api('deleteInTrans', {year:state.year, id});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  state.inTrans = state.inTrans.filter(t=>String(t.id)!==String(id));
+  renderInTable(); renderItemsTable(); toast('تم الحذف','error');
+}
+
+function renderInTable() {
+  const tb = document.getElementById('inTable');
+  const canDel = ['admin','storemanager'].includes(state.user?.role);
+  const sorted = [...state.inTrans].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if (!sorted.length) { tb.innerHTML=`<tr><td colspan="8"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد واردات</p></div></td></tr>`; return; }
+  tb.innerHTML = sorted.map((t,i)=>`<tr>
+    <td>${i+1}</td><td>${fmtDate(t.date)}</td><td><strong>${t.code}</strong></td><td>${t.name}</td>
+    <td>${fmt(t.price)}</td><td>${fmt(t.qty)}</td>
+    <td style="color:var(--success);font-weight:700">${fmt(t.total)}</td>
+    <td>${canDel?`<button class="btn btn-danger btn-sm" onclick="deleteInTrans(${t.id})">🗑️</button>`:'-'}</td>
+  </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  OUT TRANSACTIONS
+// ══════════════════════════════════════════════════════
+function fillOutName() {
+  const code=document.getElementById('outCode').value;
+  const item=state.items.find(i=>i.code===code);
+  document.getElementById('outName').value=item?item.name:'';
+  if (code) { const b=getFifoBalance(code); document.getElementById('outAvailQty').value=b.qty; document.getElementById('outAvailVal').value=b.val.toFixed(2); }
+  calcOutTotal();
+}
+
+function calcOutTotal() {
+  const code=document.getElementById('outCode').value;
+  const qty=parseInt(document.getElementById('outQty').value)||0;
+  if (!code||qty<=0) { document.getElementById('outTotal').value=''; return; }
+  const cost=calcFifoCost(code,qty);
+  document.getElementById('outTotal').value = cost!==null ? cost.toFixed(2) : '⛔ رصيد غير كافٍ';
+}
+
+async function addOutTrans() {
+  const date=document.getElementById('outDate').value;
+  const code=document.getElementById('outCode').value;
+  const name=document.getElementById('outName').value;
+  const qty=parseInt(document.getElementById('outQty').value);
+  if (!date||!code||!qty) { toast('أكمل البيانات','error'); return; }
+  const cost=calcFifoCost(code,qty);
+  if (cost===null) { toast('⛔ الرصيد المتاح غير كافٍ','error'); return; }
+  const r = await api('addOutTrans', {year:state.year, date, code, name, qty, total:cost.toFixed(2)});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  state.outTrans.push({id:r.id, date, code, name, qty, total:cost.toFixed(2)});
+  renderOutTable(); renderItemsTable();
+  document.getElementById('outQty').value='';
+  document.getElementById('outTotal').value='';
+  fillOutName();
+  toast('✅ تم تسجيل المنصرف');
+}
+
+async function deleteOutTrans(id) {
+  if (!confirm('حذف هذه الحركة؟')) return;
+  const r = await api('deleteOutTrans', {year:state.year, id});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  state.outTrans = state.outTrans.filter(t=>String(t.id)!==String(id));
+  renderOutTable(); renderItemsTable(); toast('تم الحذف','error');
+}
+
+function renderOutTable() {
+  const tb=document.getElementById('outTable');
+  const canDel=['admin','storemanager'].includes(state.user?.role);
+  const sorted=[...state.outTrans].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if (!sorted.length) { tb.innerHTML=`<tr><td colspan="7"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد منصرفات</p></div></td></tr>`; return; }
+  tb.innerHTML=sorted.map((t,i)=>`<tr>
+    <td>${i+1}</td><td>${fmtDate(t.date)}</td><td><strong>${t.code}</strong></td><td>${t.name}</td>
+    <td>${fmt(t.qty)}</td>
+    <td style="color:var(--danger);font-weight:700">${fmt(t.total)}</td>
+    <td>${canDel?`<button class="btn btn-danger btn-sm" onclick="deleteOutTrans(${t.id})">🗑️</button>`:'-'}</td>
+  </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  CARD
+// ══════════════════════════════════════════════════════
+function loadCard() {
+  const code=document.getElementById('cardCode').value;
+  if (!code) { document.getElementById('cardStats').style.display='none'; document.getElementById('cardTableWrap').style.display='none'; return; }
+  const op=state.opening.find(o=>o.code===code)||{qty:0,val:0};
+  const ins=state.inTrans.filter(t=>t.code===code).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const outs=state.outTrans.filter(t=>t.code===code).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const totInQ=ins.reduce((s,t)=>s+parseInt(t.qty),0);
+  const totInV=ins.reduce((s,t)=>s+parseFloat(t.total),0);
+  const totOutQ=outs.reduce((s,t)=>s+parseInt(t.qty),0);
+  const totOutV=outs.reduce((s,t)=>s+parseFloat(t.total),0);
+  const bal=getFifoBalance(code);
+  document.getElementById('cs-opQty').textContent=fmt(op.qty);
+  document.getElementById('cs-opVal').textContent='قيمة: '+fmt(op.val)+' ج.م';
+  document.getElementById('cs-inQty').textContent=fmt(totInQ);
+  document.getElementById('cs-inVal').textContent='قيمة: '+fmt(totInV)+' ج.م';
+  document.getElementById('cs-outQty').textContent=fmt(totOutQ);
+  document.getElementById('cs-outVal').textContent='قيمة: '+fmt(totOutV)+' ج.م';
+  document.getElementById('cs-balQty').textContent=fmt(bal.qty);
+  document.getElementById('cs-balVal').textContent='قيمة: '+fmt(bal.val)+' ج.م';
+  document.getElementById('cardStats').style.display='grid';
+  document.getElementById('cardTableWrap').style.display='block';
+
+  let mvs=[];
+  if (parseFloat(op.qty)>0) mvs.push({date:'—', type:'open', inQ:parseFloat(op.qty), inV:parseFloat(op.val), outQ:0, outV:0});
+  ins.forEach(t=>mvs.push({date:t.date,type:'in',inQ:parseInt(t.qty),inV:parseFloat(t.total),outQ:0,outV:0}));
+  outs.forEach(t=>mvs.push({date:t.date,type:'out',inQ:0,inV:0,outQ:parseInt(t.qty),outV:parseFloat(t.total)}));
+  mvs.sort((a,b)=>{ if(a.type==='open') return -1; if(b.type==='open') return 1; return String(a.date).localeCompare(String(b.date)); });
+
+  let rQ=0,rV=0;
+  document.getElementById('cardBody').innerHTML=mvs.map((m,i)=>{
+    rQ+=m.inQ-m.outQ; rV+=m.inV-m.outV;
+    const typeLabel=m.type==='open'?'🏁 أول مدة':m.type==='in'?'<span class="badge bi">📥 وارد</span>':'<span class="badge bo">📤 منصرف</span>';
+    return `<tr>
+      <td>${i+1}</td><td>${m.date==='—'?'—':fmtDate(m.date)}</td><td>${typeLabel}</td>
+      <td style="color:var(--success)">${m.inQ>0?fmt(m.inQ):'-'}</td>
+      <td style="color:var(--success)">${m.inV>0?fmt(m.inV):'-'}</td>
+      <td style="color:var(--danger)">${m.outQ>0?fmt(m.outQ):'-'}</td>
+      <td style="color:var(--danger)">${m.outV>0?fmt(m.outV):'-'}</td>
+      <td style="font-weight:800;color:var(--primary)">${fmt(rQ)}</td>
+      <td style="font-weight:800;color:var(--primary)">${fmt(rV)} ج.م</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('cardFoot').innerHTML=`<td colspan="3">الإجمالي</td><td>${fmt(totInQ)}</td><td>${fmt(totInV)} ج.م</td><td>${fmt(totOutQ)}</td><td>${fmt(totOutV)} ج.م</td><td>${fmt(bal.qty)}</td><td>${fmt(bal.val)} ج.م</td>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  MONTHLY
+// ══════════════════════════════════════════════════════
+function loadMonthly() {
+  const month=document.getElementById('monthFilter').value; if(!month) return;
+  let tIQ=0,tIV=0,tOQ=0,tOV=0,tBQ=0,tBV=0;
+  const rows=state.items.map((item,i)=>{
+    const ins=state.inTrans.filter(t=>t.code===item.code&&String(t.date).startsWith(month));
+    const outs=state.outTrans.filter(t=>t.code===item.code&&String(t.date).startsWith(month));
+    const iQ=ins.reduce((s,t)=>s+parseInt(t.qty),0);
+    const iV=ins.reduce((s,t)=>s+parseFloat(t.total),0);
+    const oQ=outs.reduce((s,t)=>s+parseInt(t.qty),0);
+    const oV=outs.reduce((s,t)=>s+parseFloat(t.total),0);
+    const bal=getFifoBalance(item.code);
+    tIQ+=iQ;tIV+=iV;tOQ+=oQ;tOV+=oV;tBQ+=bal.qty;tBV+=bal.val;
+    return `<tr><td>${i+1}</td><td><strong>${item.code}</strong></td><td>${item.name}</td>
+      <td style="color:var(--success)">${fmt(iQ)}</td><td style="color:var(--success)">${fmt(iV)}</td>
+      <td style="color:var(--danger)">${fmt(oQ)}</td><td style="color:var(--danger)">${fmt(oV)}</td>
+      <td style="font-weight:700">${fmt(bal.qty)}</td><td style="font-weight:700">${fmt(bal.val)} ج.م</td></tr>`;
+  });
+  document.getElementById('monthlyBody').innerHTML=rows.join('')||`<tr><td colspan="9"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد بيانات</p></div></td></tr>`;
+  document.getElementById('monthlyFoot').innerHTML=`<td colspan="3">الإجمالي</td><td>${fmt(tIQ)}</td><td>${fmt(tIV)} ج.م</td><td>${fmt(tOQ)}</td><td>${fmt(tOV)} ج.م</td><td>${fmt(tBQ)}</td><td>${fmt(tBV)} ج.م</td>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  GENERAL
+// ══════════════════════════════════════════════════════
+function loadGeneral() {
+  const from=document.getElementById('genFrom').value;
+  const to=document.getElementById('genTo').value;
+  if (!from||!to) return;
+  let tOpQ=0,tOpV=0,tInQ=0,tInV=0,tOtQ=0,tOtV=0,tClQ=0,tClV=0;
+  const rows=state.items.map((item,i)=>{
+    const op=state.opening.find(o=>o.code===item.code)||{qty:0,val:0};
+    const opQ=parseFloat(op.qty)||0, opV=parseFloat(op.val)||0;
+    const pIns=state.inTrans.filter(t=>t.code===item.code&&String(t.date)>=from&&String(t.date)<=to);
+    const pOuts=state.outTrans.filter(t=>t.code===item.code&&String(t.date)>=from&&String(t.date)<=to);
+    const pInQ=pIns.reduce((s,t)=>s+parseInt(t.qty),0);
+    const pInV=pIns.reduce((s,t)=>s+parseFloat(t.total),0);
+    const pOutQ=pOuts.reduce((s,t)=>s+parseInt(t.qty),0);
+    const pOutV=pOuts.reduce((s,t)=>s+parseFloat(t.total),0);
+    const clQ=opQ+pInQ-pOutQ, clV=opV+pInV-pOutV;
+    tOpQ+=opQ;tOpV+=opV;tInQ+=pInQ;tInV+=pInV;tOtQ+=pOutQ;tOtV+=pOutV;tClQ+=clQ;tClV+=clV;
+    return `<tr><td>${i+1}</td><td><strong>${item.code}</strong></td><td>${item.name}</td>
+      <td>${fmt(opQ)}</td><td>${fmt(opV)} ج.م</td>
+      <td style="color:var(--success)">${fmt(pInQ)}</td><td style="color:var(--success)">${fmt(pInV)} ج.م</td>
+      <td style="color:var(--danger)">${fmt(pOutQ)}</td><td style="color:var(--danger)">${fmt(pOutV)} ج.م</td>
+      <td style="font-weight:800;color:var(--primary)">${fmt(clQ)}</td><td style="font-weight:800;color:var(--primary)">${fmt(clV)} ج.م</td></tr>`;
+  });
+  document.getElementById('generalBody').innerHTML=rows.join('')||`<tr><td colspan="11"><div class="empty"><div class="empty-icon">📭</div><p>لا توجد بيانات</p></div></td></tr>`;
+  document.getElementById('generalFoot').innerHTML=`<td colspan="3">الإجمالي</td><td>${fmt(tOpQ)}</td><td>${fmt(tOpV)} ج.م</td><td>${fmt(tInQ)}</td><td>${fmt(tInV)} ج.م</td><td>${fmt(tOtQ)}</td><td>${fmt(tOtV)} ج.م</td><td>${fmt(tClQ)}</td><td>${fmt(tClV)} ج.م</td>`;
+  document.getElementById('gen-opQty').textContent=fmt(tOpQ);document.getElementById('gen-opVal').textContent='قيمة: '+fmt(tOpV)+' ج.م';
+  document.getElementById('gen-inQty').textContent=fmt(tInQ);document.getElementById('gen-inVal').textContent='قيمة: '+fmt(tInV)+' ج.م';
+  document.getElementById('gen-outQty').textContent=fmt(tOtQ);document.getElementById('gen-outVal').textContent='قيمة: '+fmt(tOtV)+' ج.م';
+  document.getElementById('gen-clQty').textContent=fmt(tClQ);document.getElementById('gen-clVal').textContent='قيمة: '+fmt(tClV)+' ج.م';
+}
+
+// ══════════════════════════════════════════════════════
+//  USERS
+// ══════════════════════════════════════════════════════
+async function loadUsers() {
+  const r=await api('getUsers');
+  if (!r.ok) return;
+  const roleInfo={admin:{label:'👑 مدير عام',cls:'admin'},storemanager:{label:'🏭 مدير مخزن',cls:'storemanager'},viewer:{label:'👁️ مشاهدة فقط',cls:'viewer'},accountant:{label:'📊 محاسب',cls:'accountant'}};
+  const avatarEmoji={admin:'👑',storemanager:'🏭',viewer:'👁️',accountant:'📊'};
+  document.getElementById('usersGrid').innerHTML=r.users.map(u=>{
+    const ri=roleInfo[u.role]||{label:u.role,cls:'viewer'};
+    return `<div class="user-card uc-${ri.cls}">
+      <div class="uc-header">
+        <div class="uc-avatar av-${ri.cls}">${avatarEmoji[u.role]||'👤'}</div>
+        <div><div class="uc-name">${u.name}</div><div class="uc-username">@${u.username}</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">الدور: <strong style="color:var(--text)">${ri.label}</strong></div>
+      <div class="uc-footer">
+        <span><span class="status-dot ${u.active?'dot-on':'dot-off'}"></span><span style="font-size:12px">${u.active?'نشط':'موقوف'}</span></span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary btn-sm" onclick="showEditUser('${u.username}','${u.name}','${u.role}',${u.active})">✏️</button>
+          ${u.username!=='admin'?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">🗑️</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showAddUserModal() {
+  document.getElementById('editUsername').value='';
+  document.getElementById('u-username').value='';
+  document.getElementById('u-username').disabled=false;
+  document.getElementById('u-name').value='';
+  document.getElementById('u-pass').value='';
+  document.getElementById('u-role').value='storemanager';
+  document.getElementById('u-active').value='true';
+  document.getElementById('addUserModal').classList.add('show');
+}
+
+function showEditUser(username,name,role,active) {
+  document.getElementById('editUsername').value=username;
+  document.getElementById('u-username').value=username;
+  document.getElementById('u-username').disabled=true;
+  document.getElementById('u-name').value=name;
+  document.getElementById('u-pass').value='';
+  document.getElementById('u-role').value=role;
+  document.getElementById('u-active').value=String(active);
+  document.getElementById('addUserModal').classList.add('show');
+}
+
+async function saveUser() {
+  const editU=document.getElementById('editUsername').value;
+  const username=document.getElementById('u-username').value.trim();
+  const name=document.getElementById('u-name').value.trim();
+  const pass=document.getElementById('u-pass').value;
+  const role=document.getElementById('u-role').value;
+  const active=document.getElementById('u-active').value==='true';
+  if (!username||!name) { toast('أكمل البيانات','error'); return; }
+  let r;
+  if (editU) {
+    r=await api('updateUser',{username:editU,name,password:pass||undefined,role,active});
+  } else {
+    if (!pass) { toast('أدخل كلمة المرور','error'); return; }
+    r=await api('addUser',{username,name,password:pass,role});
+  }
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  closeModal('addUserModal');
+  toast('✅ '+r.msg);
+  loadUsers();
+}
+
+async function deleteUser(username) {
+  if (!confirm('حذف المستخدم '+username+'؟')) return;
+  const r=await api('deleteUser',{username});
+  if (!r.ok) { toast(r.msg,'error'); return; }
+  toast('تم الحذف','error');
+  loadUsers();
+}
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function refreshSelects() {
+  const opts='<option value="">-- اختر --</option>'+state.items.map(i=>`<option value="${i.code}">${i.code} - ${i.name}</option>`).join('');
+  ['inCode','outCode','cardCode'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=opts; });
+}
+
+function setTodayDates() {
+  const today=new Date().toISOString().split('T')[0];
+  const m=today.substring(0,7);
+  ['inDate','outDate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=today; });
+  const mf=document.getElementById('monthFilter'); if(mf) mf.value=m;
+  const gf=document.getElementById('genFrom'); if(gf) gf.value=state.year+'-01-01';
+  const gt=document.getElementById('genTo'); if(gt) gt.value=today;
+}
+
+function fmt(n) {
+  const num=parseFloat(n)||0;
+  return num%1===0?num.toLocaleString('ar-EG'):num.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function fmtDate(d) {
+  if (!d||d==='—') return '—';
+  try { return new Date(String(d)+'T00:00:00').toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric'}); } catch(e) { return d; }
+}
+
+function toast(msg,type='success') {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast '+type+' show';
+  setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ══════════════════════════════════════════════════════
+//  EXCEL EXPORTS
+// ══════════════════════════════════════════════════════
+function mkWb(sheetName,headers,rows,title) {
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([[title],[],headers,...rows]);
+  ws['!cols']=headers.map(()=>({wch:18}));
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:headers.length-1}}];
+  XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  return wb;
+}
+function exportItemsExcel() {
+  const rows=state.items.map((item,i)=>{ const b=getFifoBalance(item.code); return [i+1,item.code,item.name,b.qty,b.val.toFixed(2)]; });
+  XLSX.writeFile(mkWb('الأصناف',['#','الكود','الصنف','الكمية المتاحة','القيمة المتاحة'],rows,'قائمة الأصناف '+state.year),'أصناف_'+state.year+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+function exportInExcel() {
+  const rows=[...state.inTrans].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map((t,i)=>[i+1,t.date,t.code,t.name,t.price,t.qty,t.total]);
+  XLSX.writeFile(mkWb('واردات',['#','التاريخ','الكود','الصنف','سعر الوحدة','الكمية','الإجمالي'],rows,'الواردات '+state.year),'واردات_'+state.year+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+function exportOutExcel() {
+  const rows=[...state.outTrans].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map((t,i)=>[i+1,t.date,t.code,t.name,t.qty,t.total]);
+  XLSX.writeFile(mkWb('منصرفات',['#','التاريخ','الكود','الصنف','الكمية','الإجمالي'],rows,'المنصرفات '+state.year),'منصرفات_'+state.year+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+function exportCardExcel() {
+  const code=document.getElementById('cardCode').value; if(!code){toast('اختر صنفاً','error');return;}
+  let mvs=[];
+  const op=state.opening.find(o=>o.code===code)||{qty:0,val:0};
+  if(parseFloat(op.qty)>0) mvs.push({date:'أول مدة',type:'أول مدة',inQ:parseFloat(op.qty),inV:parseFloat(op.val),outQ:0,outV:0});
+  state.inTrans.filter(t=>t.code===code).forEach(t=>mvs.push({date:t.date,type:'وارد',inQ:parseInt(t.qty),inV:parseFloat(t.total),outQ:0,outV:0}));
+  state.outTrans.filter(t=>t.code===code).forEach(t=>mvs.push({date:t.date,type:'منصرف',inQ:0,inV:0,outQ:parseInt(t.qty),outV:parseFloat(t.total)}));
+  mvs.sort((a,b)=>{ if(a.type==='أول مدة')return -1; if(b.type==='أول مدة')return 1; return String(a.date).localeCompare(String(b.date)); });
+  let rQ=0,rV=0;
+  const rows=mvs.map((m,i)=>{ rQ+=m.inQ-m.outQ;rV+=m.inV-m.outV; return [i+1,m.date,m.type,m.inQ||'',m.inV||'',m.outQ||'',m.outV||'',rQ,rV.toFixed(2)]; });
+  XLSX.writeFile(mkWb('كارت',['#','التاريخ','النوع','وارد(ك)','وارد(ق)','منصرف(ك)','منصرف(ق)','رصيد(ك)','رصيد(ق)'],rows,'كارت صنف '+code+' - '+state.year),'كارت_'+code+'_'+state.year+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+function exportMonthlyExcel() {
+  const month=document.getElementById('monthFilter').value; if(!month){toast('اختر شهراً','error');return;}
+  const rows=state.items.map((item,i)=>{
+    const ins=state.inTrans.filter(t=>t.code===item.code&&String(t.date).startsWith(month));
+    const outs=state.outTrans.filter(t=>t.code===item.code&&String(t.date).startsWith(month));
+    const iQ=ins.reduce((s,t)=>s+parseInt(t.qty),0),iV=ins.reduce((s,t)=>s+parseFloat(t.total),0);
+    const oQ=outs.reduce((s,t)=>s+parseInt(t.qty),0),oV=outs.reduce((s,t)=>s+parseFloat(t.total),0);
+    const b=getFifoBalance(item.code);
+    return [i+1,item.code,item.name,iQ,iV.toFixed(2),oQ,oV.toFixed(2),b.qty,b.val.toFixed(2)];
+  });
+  XLSX.writeFile(mkWb('شهري',['#','الكود','الصنف','وارد(ك)','وارد(ق)','منصرف(ك)','منصرف(ق)','متاح(ك)','متاح(ق)'],rows,'التقرير الشهري '+month),'تقرير_شهري_'+month+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+function exportGeneralExcel() {
+  const from=document.getElementById('genFrom').value,to=document.getElementById('genTo').value;
+  if(!from||!to){toast('اختر الفترة','error');return;}
+  const rows=state.items.map((item,i)=>{
+    const op=state.opening.find(o=>o.code===item.code)||{qty:0,val:0};
+    const opQ=parseFloat(op.qty)||0,opV=parseFloat(op.val)||0;
+    const pIns=state.inTrans.filter(t=>t.code===item.code&&String(t.date)>=from&&String(t.date)<=to);
+    const pOuts=state.outTrans.filter(t=>t.code===item.code&&String(t.date)>=from&&String(t.date)<=to);
+    const pInQ=pIns.reduce((s,t)=>s+parseInt(t.qty),0),pInV=pIns.reduce((s,t)=>s+parseFloat(t.total),0);
+    const pOutQ=pOuts.reduce((s,t)=>s+parseInt(t.qty),0),pOutV=pOuts.reduce((s,t)=>s+parseFloat(t.total),0);
+    return [i+1,item.code,item.name,opQ,opV.toFixed(2),pInQ,pInV.toFixed(2),pOutQ,pOutV.toFixed(2),opQ+pInQ-pOutQ,(opV+pInV-pOutV).toFixed(2)];
+  });
+  XLSX.writeFile(mkWb('عام',['#','الكود','الصنف','أول مدة(ك)','أول مدة(ق)','وارد(ك)','وارد(ق)','منصرف(ك)','منصرف(ق)','آخر مدة(ك)','آخر مدة(ق)'],rows,'التقرير العام '+from+' إلى '+to),'تقرير_عام_'+from+'_'+to+'.xlsx');
+  toast('✅ تم تصدير Excel');
+}
+
+// ══════════════════════════════════════════════════════
+//  AUTO-LOGIN
+// ══════════════════════════════════════════════════════
+if (state.token && state.user) { initApp(); }
+</script>
+</body>
+</html>
