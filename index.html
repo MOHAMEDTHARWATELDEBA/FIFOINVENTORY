@@ -597,13 +597,15 @@ let state = {
 async function api(action, body = {}) {
   try {
     const payload = {...body, action, token: state.token};
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
-      mode: 'cors'
+    // Google Apps Script CORS fix: send as GET with encoded JSON param
+    const url = API_URL + '?data=' + encodeURIComponent(JSON.stringify(payload));
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow'
     });
-    return await res.json();
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch(e) { return {ok: false, msg: 'خطأ في تحليل الاستجابة: ' + text.substring(0,100)}; }
   } catch(e) {
     return {ok: false, msg: 'خطأ في الاتصال: ' + e.message};
   }
